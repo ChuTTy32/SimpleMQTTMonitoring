@@ -1,41 +1,82 @@
-import paho.mqtt.client as mqtt
-import time
-import random
-import json
 import os
+import time
+import json
+import random
+import math
+import paho.mqtt.client as mqtt
+from dotenv import load_dotenv
 
-# Берем адрес брокера из переменных окружения, по умолчанию mosquitto
-BROKER = os.getenv("MQTT_BROKER", "mosquitto")
-PORT = 1883
-TOPIC = "sensors/temperature"
+load_dotenv()
+
+BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "localhost")
+BROKER_PORT = int(os.getenv("MQTT_BROKER_PORT", 1883))
+GATEWAY_ID = os.getenv("GATEWAY_ID", "esp32-01")
+PUBLISH_INTERVAL_SEC = float(os.getenv("PUBLISH_INTERVAL_SEC", 2))
+
+
+def generate_temperature(t: float) -> float:
+    return 23 + 3 * math.sin(t / 30) + random.uniform(-0.3, 0.3)
+
+
+def generate_humidity(t: float) -> float:
+    val = 60 + 10 * math.sin(t / 45) + random.uniform(-2, 2)
+    return max(0, min(100, val))  # клип в физический диапазон 0-100%
+
+
+def generate_pressure(t: float) -> float:
+    return 1013 + 2 * math.sin(t / 90) + random.uniform(-0.5, 0.5)
+
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print(f"Симулятор успешно подключен к {BROKER}")
+        print(f"[{GATEWAY_ID}] Connected to broker at {BROKER_HOST}:{BROKER_PORT}")
     else:
-        print(f"Ошибка подключения, код: {rc}")
+        print(f"[{GATEWAY_ID}] Connection failed, code={rc}")
 
-client = mqtt.Client("python_simulator")
-client.on_connect = on_connect
 
-# Пытаемся подключиться в цикле, пока брокер не поднимется
-while True:
+def on_disconnect(client, userdata, rc):
+    print(f"[{GATEWAY_ID}] Disconnected, code={rc}")
+
+
+def build_payload(value: float) -> str:
+    return json.dumps({
+        "value": round(value, 2),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    })
+
+
+def main():
+    client = mqtt.Client(client_id=GATEWAY_ID)
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
+
+    client.connect(BROKER_HOST, BROKER_PORT, keepalive=60)
+    client.loop_start()
+
+    start_time = time.time()
     try:
-        client.connect(BROKER, PORT, 60)
-        break
-    except ConnectionRefusedError:
-        print("Брокер недоступен, ждем 2 секунды...")
-        time.sleep(2)
+        while True:
+            elapsed = time.time() - start_time
 
-client.loop_start()
+            readings = {
+                "temperature": generate_temperature(elapsed),
+                "humidity": generate_humidity(elapsed),
+                "pressure": generate_pressure(elapsed),
+            }
+
+            for sensor_type, value in readings.items():
+                topic = f"gateway/{GATEWAY_ID}/{sensor_type}"
+                payload = build_payload(value)
+                client.publish(topic, payload, qos=0)
+                print(f"[{GATEWAY_ID}] {topic} -> {payload}")
+
+            time.sleep(PUBLISH_INTERVAL_SEC)
+    except KeyboardInterrupt:
+        print(f"[{GATEWAY_ID}] Shutting down...")
+    finally:
+        client.loop_stop()
+        client.disconnect()
+
 
 if __name__ == "__main__":
-    while True:
-        # Генерируем температуру от 20.0 до 30.0 градусов
-        temp = round(random.uniform(20.0, 30.0), 2)
-        payload = json.dumps({"temperature": temp})
-        
-        client.publish(TOPIC, payload)
-        print(f"Симулятор отправил: {payload}")
-        
-        time.sleep(5)
+    main()
