@@ -2,29 +2,22 @@
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
     paths:
-      - 'docs/codemap/**' # Запуск только при изменениях в карте
-
-  # Allows you to run this workflow manually from the Actions tab
+      - "docs/codemap/**"
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true # Поставили true, чтобы старые зависшие запуски не плодили дубликаты артефактов!
 
 jobs:
-  # Single deploy job since we're just deploying
   deploy:
     environment:
       name: github-pages
@@ -34,7 +27,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Подготавливаем папку сборки: делаем codemap.html главной страницей
       - name: Prepare site directory
         run: |
           mkdir -p _site
@@ -47,9 +39,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Загружаем подготовленную директорию вместо всего репозитория
-          path: '_site'
+          path: "_site"
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4 # Использование версии v4 решает баг с двойными артефактами
