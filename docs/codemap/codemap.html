@@ -228,8 +228,8 @@
       </div>
       <div>
         <h3>Статус</h3>
-        <p>Реализовано: MQTT-брокер + симулятор датчика (сборка временно сломана, см. PROJECT.md)
-        + каркас дашборда. Спланировано, кода нет: consumer, БД, REST API.</p>
+        <p>Реализовано: MQTT-брокер + симулятор датчика (сборка образа не проверялась
+        реальным docker build) + каркас дашборда. Спланировано, кода нет: consumer, БД, REST API.</p>
       </div>
       <div class="full-link">
         Источник этой информации и полный актуальный контекст проекта:
@@ -352,8 +352,8 @@ const DATA = {
      entrypoints:["sensor/simulator.py:97 (main)"], tests:[],
      constraints:["Конфиг через .env: MQTT_BROKER, MQTT_BROKER_PORT, GATEWAY_ID, PUBLISH_INTERVAL_SEC",
        "3 метрики за тик: temperature, humidity, pressure (simulator.py:77-87)",
-       "СЕЙЧАС СЛОМАНО: sensor/Dockerfile содержит невалидную строку `COPY .env` — образ не соберётся",
-       "sensor/.env-example — placeholder-значения (MQTT_BROKER_PORT=99999 — невалидный порт), не рабочие дефолты"],
+       "sensor/Dockerfile берёт sensor/.env через COPY .env .env (gitignored, создать вручную); синтаксис исправлен, реальная сборка не проверялась (Docker недоступен в среде проверки)",
+       "sensor/.env-example — по-прежнему placeholder-значения (MQTT_BROKER_PORT=99999 — невалидный порт), но Dockerfile его больше не использует"],
      evidence:"sensor/simulator.py; sensor/Dockerfile"},
     {id:"mqtt-broker", type:"broker", layer:2, status:"implemented",
      path:"mosquitto/config/mosquitto.conf", role:"MQTT-брокер (Mosquitto 2.x) — шина между датчиком и бэкендом",
@@ -388,7 +388,7 @@ const DATA = {
   ],
   edges: [
     {from:"docker-compose", to:"mqtt-broker", type:"calls", status:"implemented", evidence:"docker-compose.yml:2-9"},
-    {from:"docker-compose", to:"fake-sensor", type:"calls", status:"implemented", evidence:"docker-compose.yml:11-16 (build не проходит из-за бага в Dockerfile)"},
+    {from:"docker-compose", to:"fake-sensor", type:"calls", status:"implemented", evidence:"docker-compose.yml:11-16"},
     {from:"fake-sensor", to:"mqtt-broker", type:"publishes", status:"implemented", evidence:"sensor/simulator.py:83-87 (топик gateway/{GATEWAY_ID}/{metric})"},
     {from:"dotnet-consumer", to:"mqtt-broker", type:"subscribes", status:"planned", evidence:"unknown — планируется, кода нет"},
     {from:"dotnet-consumer", to:"timescaledb", type:"writes", status:"planned", evidence:"unknown — планируется, кода нет"},
@@ -399,11 +399,11 @@ const DATA = {
     {id:"flow-sensor-publish", key:"1", status:"implemented",
      trigger:"Таймер в sensor/simulator.py — тик каждые PUBLISH_INTERVAL_SEC сек",
      steps:["fake-sensor","mqtt-broker"],
-     outcome:"В рабочем окружении сообщение доставляется в топик Mosquitto. Сейчас сборка образа sensor сломана (см. constraints fake-sensor) — поток нерабочий, пока не почините Dockerfile."},
+     outcome:"Сообщение доставляется в топик Mosquitto. Требует рабочего sensor/.env в build-контексте (gitignored — см. constraints fake-sensor); реальная сборка не проверялась."},
     {id:"flow-compose-up", key:"2", status:"implemented",
      trigger:"docker compose up --build",
      steps:["docker-compose","mqtt-broker","fake-sensor"],
-     outcome:"mqtt-broker поднимается. Сборка simulator падает из-за невалидного COPY в sensor/Dockerfile. После починки нужен ещё рабочий sensor/.env (текущий .env-example — placeholder-значения)."},
+     outcome:"mqtt-broker и simulator поднимаются, если перед сборкой в sensor/ лежит рабочий .env (см. constraints fake-sensor). Реальная сборка не проверялась — Docker недоступен в среде проверки."},
     {id:"flow-e2e-target", key:"3", status:"planned",
      trigger:"fake-sensor публикует показание (целевой e2e-поток из docs/PROJECT.md)",
      steps:["fake-sensor","mqtt-broker","dotnet-consumer","timescaledb","rest-api","dashboard-ui"],
