@@ -23,35 +23,52 @@
         |
         | MQTT subscribe
         v
-[.NET Consumer (Worker Service)]      <- ещё не реализован
+[.NET Consumer (Worker Service)]      <- ещё не реализован (только consumer/.gitkeep)
         |
         | INSERT
         v
-[PostgreSQL + TimescaleDB (Docker)]   <- ещё не развёрнут
+[PostgreSQL + TimescaleDB (Docker)]   <- ещё не развёрнут (схема описана)
         |
         | SELECT
         v
-[.NET REST API (Minimal API)]         <- ещё не реализован
+[.NET REST API (Minimal API)]         <- ещё не реализован (только api/.gitkeep)
         |
-        | HTTP polling
+        | HTTP polling (возможно + WebSocket, см. ниже)
         v
-[Web Dashboard (Vue 3 + Vite)]        <- в разработке на ветке feature/ui
+[Web Dashboard (Vue 3 + Vite)]        <- каркас в main/ui/, не подключён к бэкенду
 ```
 
-Вся система должна подниматься одной командой: `docker compose up`.
+Вся система должна подниматься одной командой: `docker compose up`. Сейчас так
+поднимаются только `mqtt-broker` и `simulator` — сервисов для БД/consumer/API/дашборда
+в `docker-compose.yml` ещё нет.
 
-## Статус по модулям (факт на 2026-08-06)
+## Статус по модулям (факт на 2026-08-06, после мержа `feature/ui` → `main`)
 
-| #   | Модуль                   | Статус                        | Комментарий                                                                                                           |
-| --- | ------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 0   | Подготовка               | ✅ сделано                    | Репозиторий, README, ветки                                                                                            |
-| 1   | Docker + Mosquitto       | ✅ сделано                    | Брокер поднимается в Docker, топики рабочие                                                                           |
-| 2   | PostgreSQL + TimescaleDB | 🟡 спроектировано             | Схема БД описана в`docs/database-schema.md` (ветка `feature/ui`), сервис в `docker-compose.yml` ещё не добавлен       |
-| 3   | Fake Sensor              | ✅ сделано, диверг. от плана  | Публикует 3 метрики (temperature/humidity/pressure), формат топика и payload отличается от исходного плана (см. ниже) |
-| 4   | .NET Consumer            | ⬜ не начато                  | Директории`consumer/` в дереве нет                                                                                    |
-| 5   | REST API                 | ⬜ не начато                  | Директории`api/` в дереве нет                                                                                         |
-| 6   | Веб-дашборд              | 🟡 в работе, диверг. от плана | Стек сменился с Nuxt 4 на Vue 3 + Vite (см. ниже); каркас проекта — только на ветке`feature/ui`, в `main` не смёржен  |
-| 7   | Финал / интеграция       | ⬜ не начато                  | End-to-end пайплайн (датчик → БД → API → дашборд) пока не собран                                                      |
+| # | Модуль | Статус | Комментарий |
+|---|--------|--------|-------------|
+| 0 | Подготовка | ✅ сделано | Репозиторий, README, ветки |
+| 1 | Docker + Mosquitto | ✅ сделано | Брокер поднимается в Docker, топики рабочие |
+| 2 | PostgreSQL + TimescaleDB | 🟡 спроектировано | Схема БД в `docs/database-schema.md` (в `main`), сервис в `docker-compose.yml` ещё не добавлен |
+| 3 | Fake Sensor | 🟠 сделано, но сломано | Публикует 3 метрики; **`sensor/.env-example` сейчас содержит placeholder-значения (см. «Известные проблемы»), из коробки не работает** |
+| 4 | .NET Consumer | ⬜ не начато | Директория `consumer/` создана (только `.gitkeep`), кода нет |
+| 5 | REST API | ⬜ не начато | Директория `api/` создана (только `.gitkeep`), кода нет |
+| 6 | Веб-дашборд | 🟡 каркас в main, не подключён | Стек — Vue 3 + Vite (не Nuxt, см. ниже); смёржен в `main`, но не подключён к реальному API |
+| 7 | Финал / интеграция | ⬜ не начато | End-to-end пайплайн (датчик → БД → API → дашборд) пока не собран |
+
+## Известные проблемы
+
+- **`sensor/Dockerfile` сейчас не собирается (несохранённая/неполная правка).** На момент
+  написания в рабочей копии строка `COPY .env-example .env` заменена на `COPY .env` —
+  это невалидный синтаксис Dockerfile (`COPY` требует минимум источник и назначение),
+  сборка упадёт с ошибкой парсинга. Похоже на незавершённую правку в процессе (возможно,
+  попытка перейти на схему «класть `.env` руками, не копировать из example» — это было бы
+  правильным направлением, см. ниже, но текущая строка синтаксически не завершена).
+- **`sensor/.env-example` не рабочий как есть.** Содержит явные placeholder-значения:
+  `MQTT_BROKER=some-hostname`, `MQTT_BROKER_PORT=99999` (невалидный порт, > 65535),
+  `GATEWAY_ID=controller-name-or-id`, `PUBLISH_INTERVAL_SEC=60`. Даже после починки
+  Dockerfile-синтаксиса нужно класть в `sensor/.env` реальные значения
+  (`MQTT_BROKER=mqtt-broker`, `MQTT_BROKER_PORT=1883`) перед сборкой — см. README
+  «Как запустить».
 
 ## Технологический стек (факт)
 
@@ -61,6 +78,7 @@
 - `paho-mqtt==1.6.1`, `python-dotenv==1.0.1`
 - Конфигурация через `.env` (`MQTT_BROKER`, `MQTT_BROKER_PORT`, `GATEWAY_ID`, `PUBLISH_INTERVAL_SEC`)
 - Генерирует три метрики с шумом и синусоидальной динамикой: температура, влажность, давление
+- См. «Известные проблемы» — `.env-example` сейчас не рабочий
 
 ### MQTT Broker — `mosquitto/`
 
@@ -69,17 +87,23 @@
 
 ### PostgreSQL + TimescaleDB
 
-- Не развёрнут. Схема спроектирована и задокументирована (см. раздел «Схема БД» ниже),
-  но сервиса в `docker-compose.yml` пока нет.
+- Не развёрнут. Схема спроектирована и задокументирована в `docs/database-schema.md`
+  (теперь в `main`, см. раздел «Схема БД» ниже), но сервиса в `docker-compose.yml` пока нет.
 
-### .NET Consumer / REST API
+### .NET Consumer — `consumer/`
 
-- Не начаты. В плане: .NET 8 Worker Service + MQTTnet для консьюмера, Minimal API + общий
-  `Shared.Models` проект для REST API. Директории `consumer/` и `api/` в текущем дереве
-  отсутствуют, несмотря на коммит `b319e2c "Make dir's for api, consumer, dashboard, docs"` —
-  видимо, пустые директории не попали в git (git не трекает пустые папки).
+- Не начат. В плане: .NET 8 Worker Service + MQTTnet, подписка на `gateway/+/+`, запись
+  в `sensor_readings`. Директория создана (`consumer/.gitkeep`), исходников нет.
 
-### Веб-дашборд — `ui/` (ветка `feature/ui`, не в `main`)
+### REST API — `api/`
+
+- Не начат. В плане: .NET 8 Minimal API + общий `Shared.Models` проект. По README
+  на ветке `feature/ui` упоминается также WebSocket для realtime-обновлений — это
+  **не подтверждено кодом** (в `ui/package.json` нет WebSocket-клиента), считать
+  предварительной идеей, а не решением, пока не задокументировано отдельно.
+  Директория создана (`api/.gitkeep`), исходников нет.
+
+### Веб-дашборд — `ui/` (в `main`, не подключён к бэкенду)
 
 Фактический стек **разошёлся с исходным планом**: вместо Nuxt 4 + Nuxt UI + vue-chartjs
 команда завела проект на:
@@ -93,13 +117,10 @@
 - Тесты: Vitest + @vue/test-utils
 - Линтинг: ESLint + oxlint + Prettier
 
-Каркас содержит `App.vue`, `main.ts`, `router/index.ts`, `stores/counter.ts` (заглушка Pinia),
-компоненты `Layout/AppScaffold.vue`, `Sidebar/SideBar.vue`, страницу `pages/MainPage.vue`.
-Реальных данных с бэкенда пока не подключено.
-
-В `main` папки `ui/` сейчас нет вообще (ранее там лежал пустой untracked-каркас без файлов —
-он убран). Реальный код дашборда существует только на ветке `feature/ui`. Стоит решить,
-сливать ли `feature/ui` в `main`, чтобы дашборд не оставался изолированным.
+Каркас содержит `App.vue`, `main.ts`, `router/index.ts`, `stores/counter.ts` (заглушка
+Pinia), компоненты `Layout/AppScaffold.vue`, `Sidebar/SideBar.vue`, страницу
+`pages/MainPage.vue`. Реальных данных с бэкенда пока не подключено — axios есть в
+зависимостях, но ни одного вызова к API в коде нет.
 
 ## MQTT: топики и формат сообщений (факт)
 
@@ -118,20 +139,20 @@
 ```
 
 `sensor_id`/`gateway_id` в payload не передаётся — идентификатор шлюза зашит в топик.
-QoS = 0. Интервал публикации управляется `PUBLISH_INTERVAL_SEC` (по умолчанию 5с).
+QoS = 0. Интервал публикации управляется `PUBLISH_INTERVAL_SEC`.
 
 ## Схема БД (спроектирована, не развёрнута)
 
-Полное описание и SQL — `docs/database-schema.md` (сейчас только на ветке `feature/ui`).
+Полное описание и SQL — [`docs/database-schema.md`](database-schema.md) (в `main`).
 PostgreSQL + TimescaleDB, `sensor_readings` — hypertable.
 
-| Таблица           | Назначение                                                                      |
-| ----------------- | ------------------------------------------------------------------------------- |
-| `users`           | Пользователи и роли (`admin`, `operator`, `viewer`)                             |
-| `controllers`     | Физические контроллеры/шлюзы (ПЛК, ESP32 и т.п.)                                |
-| `sensors`         | Датчики, привязанные к контроллеру, с уникальным MQTT-топиком                   |
-| `metrics`         | Типы измеряемых величин датчика и пороги для алертинга                          |
-| `system_settings` | Глобальные настройки в формате key-value                                        |
+| Таблица | Назначение |
+|---|---|
+| `users` | Пользователи и роли (`admin`, `operator`, `viewer`) |
+| `controllers` | Физические контроллеры/шлюзы (ПЛК, ESP32 и т.п.) |
+| `sensors` | Датчики, привязанные к контроллеру, с уникальным MQTT-топиком |
+| `metrics` | Типы измеряемых величин датчика и пороги для алертинга |
+| `system_settings` | Глобальные настройки в формате key-value |
 | `sensor_readings` | Временные ряды показаний (TimescaleDB hypertable, партиционирование по времени) |
 
 Эта схема заметно более развитая, чем плоская таблица `sensor_readings` из исходного плана
@@ -143,24 +164,33 @@ PostgreSQL + TimescaleDB, `sensor_readings` — hypertable.
 ## Структура репозитория (main, факт)
 
 ```
-├── docker-compose.yml          # только mqtt-broker + simulator
+├── docker-compose.yml                  # только mqtt-broker + simulator
+├── SimpleMQTTMonitoring.code-workspace  # multi-root workspace для VS Code
+├── AGENTS.md
+├── README.MD
 ├── mosquitto/config/mosquitto.conf
-├── sensor/                     # Fake Sensor (Python)
+├── sensor/                              # Fake Sensor (Python) — см. «Известные проблемы»
 │   ├── simulator.py
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env-example
+├── consumer/                            # только .gitkeep, кода нет
+├── api/                                 # только .gitkeep, кода нет
+├── ui/                                  # Vue 3 + Vite дашборд, каркас
 └── docs/
-    ├── PROJECT.md                # этот файл
-    └── ROADMAP-SKILL.md          # скилл генерации карты кода (docs/codemap/)
+    ├── PROJECT.md                       # этот файл
+    ├── database-schema.md               # схема БД PostgreSQL + TimescaleDB
+    ├── image/database-schema/           # диаграмма к схеме
+    ├── ROADMAP-SKILL.md                 # скилл генерации карты кода
+    └── codemap/                         # генерируется roadmap-скиллом, не редактируется вручную
 ```
-
-На ветке `feature/ui` дополнительно: полноценный Vue-проект в `ui/` и `docs/database-schema.md`.
 
 ## Ветки
 
-- `main` — актуальная история: брокер + симулятор. Отстаёт от `feature/ui` на 3 коммита.
-- `feature/ui` — содержит `main` целиком + каркас Vue-дашборда + схему БД. Не смёржена.
+`feature/ui` смёржена в `main` через PR #1 (2026-08-06) — дашборд, схема БД и заглушки
+`api/`/`consumer/` теперь в основной ветке. Отдельного `feature/ui` больше не требуется
+для получения этого кода (ветка может ещё существовать в удалённом репозитории — при
+уборке веток проверить, что она безопасно удаляется после мержа).
 
 ## Дальнейшие цели проекта
 
@@ -182,8 +212,8 @@ Application), с промышленной автоматизацией вмес�
 
 ## Ближайшие шаги (вытекают из статуса выше)
 
-1. Решить, когда сливать `feature/ui` в `main` — дашборд пока изолирован на отдельной ветке
+1. Починить `sensor/.env-example` (см. «Известные проблемы») — сейчас `docker compose up --build` не работает из коробки
 2. Добавить сервис PostgreSQL+TimescaleDB в `docker-compose.yml`, применить схему из `database-schema.md`
 3. Начать .NET Consumer: подписка на `gateway/+/+`, запись в `sensor_readings`
-4. Начать REST API поверх БД
+4. Начать REST API поверх БД (решить: HTTP polling или + WebSocket, задокументировать решение здесь)
 5. Подключить дашборд к реальным данным вместо заглушек

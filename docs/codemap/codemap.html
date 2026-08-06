@@ -224,17 +224,17 @@
       <div>
         <h3>Стек</h3>
         <p>Python (симулятор) · Mosquitto 2.x · .NET 8 (Worker + Minimal API, план) · PostgreSQL +
-        TimescaleDB (план) · Vue 3 + Vite (дашборд, ветка feature/ui) · Docker Compose.</p>
+        TimescaleDB (план) · Vue 3 + Vite (дашборд, каркас в main) · Docker Compose.</p>
       </div>
       <div>
         <h3>Статус</h3>
-        <p>Реализовано: MQTT-брокер + симулятор датчика. В разработке/спланировано: consumer, БД,
-        REST API, дашборд.</p>
+        <p>Реализовано: MQTT-брокер + симулятор датчика (сборка временно сломана, см. PROJECT.md)
+        + каркас дашборда. Спланировано, кода нет: consumer, БД, REST API.</p>
       </div>
       <div class="full-link">
         Источник этой информации и полный актуальный контекст проекта:
         <a href="../PROJECT.md" target="_blank">docs/PROJECT.md</a>
-        (файл пока не закоммичен — прямой ссылки на GitHub для него ещё нет)
+        (локальные правки ещё не запушены — прямая ссылка на GitHub появится после push)
       </div>
     </div>
   </div>
@@ -326,10 +326,10 @@
 </div>
 
 <script>
-const COMMIT = "3d9aae8746a999f5ed9565c34e32d17295ab5cd3";
+const COMMIT = "c2c453eddb96fd3a75acb6e76b3eafcee063c668";
 const REPO = "ChuTTy32/SimpleMQTTMonitoring";
 const GH = "https://github.com/" + REPO;
-const GENERATED_AT = "2026-08-06T14:26:07Z";
+const GENERATED_AT = "2026-08-06T14:46:23Z";
 
 function ghLink(path, line){
   if(!path) return null;
@@ -345,65 +345,69 @@ const DATA = {
     {id:"docker-compose", type:"orchestration", layer:0, status:"implemented",
      path:"docker-compose.yml", role:"Orchestration — определяет и запускает локальный стек",
      entrypoints:["docker-compose.yml"], tests:[],
-     constraints:["Сейчас только 2 сервиса: mqtt-broker, simulator","Нет сервисов для БД/consumer/API/дашборда"],
+     constraints:["Только 2 сервиса: mqtt-broker, simulator","Нет сервисов для БД/consumer/API/дашборда"],
      evidence:"docker-compose.yml:1-17"},
     {id:"fake-sensor", type:"service", layer:1, status:"implemented",
      path:"sensor/", role:"Симулированный IIoT-шлюз — публикует показания по MQTT",
      entrypoints:["sensor/simulator.py:97 (main)"], tests:[],
      constraints:["Конфиг через .env: MQTT_BROKER, MQTT_BROKER_PORT, GATEWAY_ID, PUBLISH_INTERVAL_SEC",
-       "Ретраи подключения до готовности брокера (simulator.py:60-68)",
-       "3 метрики за тик: temperature, humidity, pressure (simulator.py:77-87)"],
-     evidence:"sensor/simulator.py"},
+       "3 метрики за тик: temperature, humidity, pressure (simulator.py:77-87)",
+       "СЕЙЧАС СЛОМАНО: sensor/Dockerfile содержит невалидную строку `COPY .env` — образ не соберётся",
+       "sensor/.env-example — placeholder-значения (MQTT_BROKER_PORT=99999 — невалидный порт), не рабочие дефолты"],
+     evidence:"sensor/simulator.py; sensor/Dockerfile"},
     {id:"mqtt-broker", type:"broker", layer:2, status:"implemented",
      path:"mosquitto/config/mosquitto.conf", role:"MQTT-брокер (Mosquitto 2.x) — шина между датчиком и бэкендом",
      entrypoints:["mosquitto/config/mosquitto.conf"], tests:[],
      constraints:["listener 1883","allow_anonymous true — без аутентификации, только для разработки"],
      evidence:"mosquitto/config/mosquitto.conf:1-3"},
     {id:"dotnet-consumer", type:"service", layer:3, status:"planned",
-     path:"consumer/ (директории нет в репозитории)", role:"Планируемый сервис — .NET Worker, подписка на MQTT, запись в TimescaleDB",
+     path:"consumer/", role:"Планируемый сервис — .NET Worker, подписка на MQTT, запись в TimescaleDB",
      entrypoints:[], tests:[],
-     constraints:["Не реализовано — исходников нет","Планируемый стек: .NET 8 Worker Service, MQTTnet, Npgsql"],
-     evidence:"docs/PROJECT.md (раздел «Технологический стек»)"},
+     constraints:["Директория создана (только consumer/.gitkeep), исходников нет","Планируемый стек: .NET 8 Worker Service, MQTTnet, Npgsql"],
+     evidence:"consumer/.gitkeep; docs/PROJECT.md"},
     {id:"timescaledb", type:"database", layer:4, status:"planned",
      path:"(сервиса нет в docker-compose.yml)", role:"Планируемая БД — PostgreSQL + TimescaleDB, hypertable sensor_readings",
      entrypoints:[], tests:[],
      constraints:["Схема спроектирована (users, controllers, sensors, metrics, system_settings, sensor_readings), но не развёрнута",
-       "SQL существует только на ветке feature/ui (docs/database-schema.md)"],
-     evidence:"docs/PROJECT.md (раздел «Схема БД»)"},
+       "SQL теперь в main: docs/database-schema.md (ранее было только на ветке feature/ui)"],
+     evidence:"docs/database-schema.md"},
     {id:"rest-api", type:"service", layer:5, status:"planned",
-     path:"api/ (директории нет в репозитории)", role:"Планируемый сервис — .NET Minimal API, отдаёт показания по HTTP",
+     path:"api/", role:"Планируемый сервис — .NET Minimal API, отдаёт показания по HTTP (возможно + WebSocket)",
      entrypoints:[], tests:[],
-     constraints:["Не реализовано — исходников нет","Планируемые эндпоинты: GET /readings, /readings/latest, /readings?from=&to="],
-     evidence:"docs/PROJECT.md (раздел «Технологический стек»)"},
-    {id:"dashboard-ui", type:"frontend", layer:6, status:"planned",
-     path:"ui/ (только на ветке feature/ui, не в main)", role:"Планируемый фронтенд — Vue 3 + Vite дашборд",
-     entrypoints:["ui/src/main.ts (ветка feature/ui)"], tests:["ui/src/__tests__/App.spec.ts (ветка feature/ui)"],
-     constraints:["Только каркас: App.vue, router, Pinia-заглушка, AppScaffold/SideBar, MainPage",
-       "Не смёржен в main, не подключён к REST API","Стек разошёлся с планом: Nuxt 4 → Vue 3 + Vite"],
-     evidence:"docs/PROJECT.md (раздел «Веб-дашборд»)"}
+     constraints:["Директория создана (только api/.gitkeep), исходников нет",
+       "WebSocket упоминается в README ветки feature/ui, но не подтверждён кодом (нет зависимости в ui/package.json)"],
+     evidence:"api/.gitkeep; docs/PROJECT.md"},
+    {id:"dashboard-ui", type:"frontend", layer:6, status:"implemented",
+     path:"ui/", role:"Веб-дашборд — Vue 3 + Vite, каркас без подключения к бэкенду",
+     entrypoints:["ui/src/main.ts"], tests:["ui/src/__tests__/App.spec.ts"],
+     constraints:["Смёржен в main (PR #1) — каркас реально существует в этом коммите",
+       "App.vue, router, Pinia-заглушка (stores/counter.ts), AppScaffold/SideBar, MainPage",
+       "axios есть в зависимостях, но ни одного реального вызова к API в коде нет",
+       "Стек разошёлся с исходным планом: Nuxt 4 → Vue 3 + Vite"],
+     evidence:"ui/package.json; ui/src/main.ts"}
   ],
   edges: [
     {from:"docker-compose", to:"mqtt-broker", type:"calls", status:"implemented", evidence:"docker-compose.yml:2-9"},
-    {from:"docker-compose", to:"fake-sensor", type:"calls", status:"implemented", evidence:"docker-compose.yml:11-16"},
-    {from:"fake-sensor", to:"mqtt-broker", type:"publishes", status:"implemented", evidence:"sensor/simulator.py:83-87"},
+    {from:"docker-compose", to:"fake-sensor", type:"calls", status:"implemented", evidence:"docker-compose.yml:11-16 (build не проходит из-за бага в Dockerfile)"},
+    {from:"fake-sensor", to:"mqtt-broker", type:"publishes", status:"implemented", evidence:"sensor/simulator.py:83-87 (топик gateway/{GATEWAY_ID}/{metric})"},
     {from:"dotnet-consumer", to:"mqtt-broker", type:"subscribes", status:"planned", evidence:"unknown — планируется, кода нет"},
     {from:"dotnet-consumer", to:"timescaledb", type:"writes", status:"planned", evidence:"unknown — планируется, кода нет"},
     {from:"rest-api", to:"timescaledb", type:"reads", status:"planned", evidence:"unknown — планируется, кода нет"},
-    {from:"dashboard-ui", to:"rest-api", type:"calls", status:"planned", evidence:"unknown — планируется, axios в зависимостях но не подключён"}
+    {from:"dashboard-ui", to:"rest-api", type:"calls", status:"planned", evidence:"unknown — axios в зависимостях, но ни одного вызова к API в исходниках нет"}
   ],
   flows: [
     {id:"flow-sensor-publish", key:"1", status:"implemented",
-     trigger:"Таймер в sensor/simulator.py — тик каждые PUBLISH_INTERVAL_SEC сек (по умолчанию 5с)",
+     trigger:"Таймер в sensor/simulator.py — тик каждые PUBLISH_INTERVAL_SEC сек",
      steps:["fake-sensor","mqtt-broker"],
-     outcome:"Сообщение доставлено в топик Mosquitto (gateway/{id}/{metric}). Подписчиков нет — цепочка обрывается на брокере."},
+     outcome:"В рабочем окружении сообщение доставляется в топик Mosquitto. Сейчас сборка образа sensor сломана (см. constraints fake-sensor) — поток нерабочий, пока не почините Dockerfile."},
     {id:"flow-compose-up", key:"2", status:"implemented",
-     trigger:"docker compose up",
+     trigger:"docker compose up --build",
      steps:["docker-compose","mqtt-broker","fake-sensor"],
-     outcome:"Брокер и симулятор подняты и работают; остальной пайплайн не поднимается — его нет в docker-compose.yml."},
+     outcome:"mqtt-broker поднимается. Сборка simulator падает из-за невалидного COPY в sensor/Dockerfile. После починки нужен ещё рабочий sensor/.env (текущий .env-example — placeholder-значения)."},
     {id:"flow-e2e-target", key:"3", status:"planned",
      trigger:"fake-sensor публикует показание (целевой e2e-поток из docs/PROJECT.md)",
      steps:["fake-sensor","mqtt-broker","dotnet-consumer","timescaledb","rest-api","dashboard-ui"],
-     outcome:"Целевой результат — обновление графика на дашборде в реальном времени. Реализованы только первые два шага."}
+     outcome:"Целевой результат — обновление графика на дашборде в реальном времени. Код реально есть только для fake-sensor, mqtt-broker и dashboard-ui (несвязанный каркас); consumer/API/БД не реализованы."}
   ]
 };
 
@@ -744,10 +748,26 @@ function setLod(low){
   if(selectedFlow) highlightFlow(DATA.flows.find(f=>f.id===selectedFlow));
 }
 
+const DRIFT = {
+  newNodes: ["dashboard-ui"],
+  changedNodes: ["fake-sensor", "rest-api", "dotnet-consumer"],
+  note: "Новое: ui/ (был только на ветке feature/ui — теперь смёржен в main), api/ и consumer/ (появились как директории-заглушки с .gitkeep). Изменилось: sensor/ (sensor/.env-example и sensor/Dockerfile правились), docs/*.md (docs/PROJECT.md переписан, добавлен docs/database-schema.md), README.MD, AGENTS.md."
+};
+let deltaShown = false;
 document.getElementById("btn-delta").addEventListener("click", () => {
   const banner = document.getElementById("delta-banner");
-  banner.textContent = "Предыдущий codemap.lock не найден — это первая (базовая) генерация карты, дрифта нет. Все узлы отмечены как новые.";
-  banner.classList.toggle("show");
+  deltaShown = !deltaShown;
+  if(deltaShown){
+    banner.textContent = "Дрифт с прошлого codemap.lock: " + DRIFT.note;
+    document.querySelectorAll(".node-group").forEach(el => {
+      const isDrift = DRIFT.newNodes.includes(el.dataset.id) || DRIFT.changedNodes.includes(el.dataset.id);
+      el.classList.toggle("dimmed", !isDrift);
+      el.classList.toggle("in-path", isDrift);
+    });
+  } else {
+    clearHighlight();
+  }
+  banner.classList.toggle("show", deltaShown);
 });
 
 document.getElementById("detail-close").addEventListener("click", deselectAll);

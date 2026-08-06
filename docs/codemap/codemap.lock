@@ -1,39 +1,53 @@
 {
-  "commit": "3d9aae8746a999f5ed9565c34e32d17295ab5cd3",
+  "commit": "c2c453eddb96fd3a75acb6e76b3eafcee063c668",
   "branch": "main",
   "working_tree_dirty": true,
   "dirty_paths": [
-    "README.MD (modified, uncommitted)",
-    "AGENTS.md (untracked)",
-    "docs/ (untracked)"
+    "AGENTS.md (modified, uncommitted)",
+    "docs/PROJECT.md (modified, uncommitted)",
+    "sensor/Dockerfile (modified, uncommitted — currently invalid syntax, see docs/PROJECT.md)"
   ],
-  "generated_at": "2026-08-06T14:26:07Z",
+  "generated_at": "2026-08-06T14:46:23Z",
   "scope": [
     "sensor/",
     "mosquitto/",
     "docker-compose.yml",
+    "ui/",
+    "api/",
+    "consumer/",
     "docs/*.md",
     "README.MD",
     "AGENTS.md",
-    ".gitignore"
+    ".gitignore",
+    "SimpleMQTTMonitoring.code-workspace"
   ],
   "excluded": [
     ".git/",
-    "ui/ — not present on branch main (exists only on branch feature/ui, out of scope for this snapshot)",
+    "ui/node_modules/",
     "docs/codemap/ — generated output, excluded from its own fingerprint",
-    "sensor/.env — gitignored local secret/config file, excluded from fingerprint"
+    "sensor/.env — gitignored local secret/config file, excluded from fingerprint",
+    "docs/image/ — binary asset, not included in the docs *.md fingerprint"
   ],
   "fingerprint_algorithm": "sha256 over sorted file list per module; for each file, hash the UTF-8 relative path concatenated with raw file bytes, accumulated into one running sha256 digest per module",
+  "previous_lock_compared_to": "docs/codemap/codemap.lock at commit 3d9aae8746a999f5ed9565c34e32d17295ab5cd3 (before merging origin/main PR #1)",
+  "changed_modules_since_previous_lock": [
+    "sensor — sensor/.env-example content changed (fingerprint differs)",
+    "docs (*.md) — docs/PROJECT.md rewritten, docs/database-schema.md added (previously only on feature/ui)",
+    "root-config — README.MD rewritten (merge), AGENTS.md edited, SimpleMQTTMonitoring.code-workspace added"
+  ],
+  "new_modules_since_previous_lock": [
+    "ui — previously did not exist in main at all; now a real Vue 3 + Vite project (merged from feature/ui via PR #1)",
+    "api — new, placeholder only (api/.gitkeep)",
+    "consumer — new, placeholder only (consumer/.gitkeep)"
+  ],
   "module_fingerprints": {
-    "sensor": "f1add9bbe90a227fa34439a55a689690fa1a6ca6167d297ff2f98bf2349b1419",
+    "sensor": "1d3a1e210dccea50363fb27171616b665b0b973bcf655a47d3fac0f733ae5bb6",
     "mosquitto": "468e940351bb3306aaeb8f5d8f19ca44c92c57292936f0700c8f1d691aba3c82",
     "docker-compose.yml": "bddcb57eb13d6480a138c1b5adbaa1da50e7c3bc55a124b0a4ffa1789bb7962f",
-    "docs (*.md)": "5856b11260705545f3e61d4134f08a692691c36e5533b8c36bc7c0d1e4e264d2",
-    "root-config (README.MD, AGENTS.md, .gitignore)": "3127122ac25d8b0bb76320777e8643fdd6a7643fcec1c0378a954f5f985b094e"
-  },
-  "planned_modules_without_fingerprint": [
-    "consumer/ — directory does not exist, no fingerprint possible",
-    "api/ — directory does not exist, no fingerprint possible",
-    "ui/ — directory does not exist on this branch (main); real content lives on branch feature/ui and is out of scope for this commit-scoped snapshot"
-  ]
+    "docs (PROJECT.md, ROADMAP-SKILL.md, database-schema.md)": "f8fc0a3727fa27baf031d29fdcd41bb02a042fd5d6262ddf65697c29bd9776e3",
+    "root-config (README.MD, AGENTS.md, .gitignore, SimpleMQTTMonitoring.code-workspace)": "acab3782fbaf376d9f6006e0c954fd9d3a04fe3c116e9dd19003bf6aeb9d51bf",
+    "ui": "4b9ee06739f12dd02627a1f65bae2e9a9b8a708bb4f5f959928090016e4dc6cc",
+    "api": "55c65876eb6f8f1e49884197c309c6b0e09d6ce577279cedca2886b3b3e65338",
+    "consumer": "ebdb97289d82cc5ae07b16abb0bb60ff44ab8b6f472b7d500aeda5eaf2682c82"
+  }
 }
