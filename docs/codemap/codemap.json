@@ -1,0 +1,175 @@
+{
+  "generated_at": "2026-08-06T14:26:07Z",
+  "generated_from_commit": "3d9aae8746a999f5ed9565c34e32d17295ab5cd3",
+  "scope": [
+    "sensor/",
+    "mosquitto/",
+    "docker-compose.yml",
+    "docs/PROJECT.md",
+    "docs/ROADMAP-SKILL.md",
+    "README.MD",
+    "AGENTS.md"
+  ],
+  "nodes": [
+    {
+      "id": "docker-compose",
+      "path": "docker-compose.yml",
+      "role": "Orchestration — defines and starts the local stack",
+      "entrypoints": ["docker-compose.yml"],
+      "tests": [],
+      "constraints": [
+        "Only two services defined today: mqtt-broker, simulator",
+        "No services yet for database, consumer, API, or dashboard"
+      ],
+      "evidence": "docker-compose.yml:1-17",
+      "status": "implemented"
+    },
+    {
+      "id": "fake-sensor",
+      "path": "sensor/",
+      "role": "Service — simulated IIoT gateway, publishes sensor readings over MQTT",
+      "entrypoints": ["sensor/simulator.py:97 (__main__ -> main())"],
+      "tests": [],
+      "constraints": [
+        "Config via env vars: MQTT_BROKER, MQTT_BROKER_PORT, GATEWAY_ID, PUBLISH_INTERVAL_SEC (sensor/.env-example)",
+        "Retries connection in a loop until broker accepts (sensor/simulator.py:60-68)",
+        "Publishes 3 metrics per tick: temperature, humidity, pressure (sensor/simulator.py:77-87)"
+      ],
+      "evidence": "sensor/simulator.py",
+      "status": "implemented"
+    },
+    {
+      "id": "mqtt-broker",
+      "path": "mosquitto/config/mosquitto.conf",
+      "role": "MQTT broker (Mosquitto 2.x) — message bus between sensor and backend",
+      "entrypoints": ["mosquitto/config/mosquitto.conf"],
+      "tests": [],
+      "constraints": [
+        "listener 1883",
+        "allow_anonymous true — no auth, dev-only configuration"
+      ],
+      "evidence": "mosquitto/config/mosquitto.conf:1-3",
+      "status": "implemented"
+    },
+    {
+      "id": "dotnet-consumer",
+      "path": "consumer/ (planned, directory not present in repo)",
+      "role": "Planned service — .NET Worker Service subscribing to MQTT, writing readings to TimescaleDB",
+      "entrypoints": [],
+      "tests": [],
+      "constraints": [
+        "Not implemented — no source files exist in the repo",
+        "Planned stack: .NET 8 Worker Service, MQTTnet, Npgsql"
+      ],
+      "evidence": "docs/PROJECT.md (раздел \"Технологический стек\", .NET Consumer / REST API)",
+      "status": "planned"
+    },
+    {
+      "id": "timescaledb",
+      "path": "(planned, no service in docker-compose.yml)",
+      "role": "Planned database — PostgreSQL + TimescaleDB, sensor_readings hypertable",
+      "entrypoints": [],
+      "tests": [],
+      "constraints": [
+        "Schema designed (users, controllers, sensors, metrics, system_settings, sensor_readings) but not deployed",
+        "Schema doc + SQL exist only on branch feature/ui, not in main"
+      ],
+      "evidence": "docs/PROJECT.md (раздел \"Схема БД\"); database-schema.md on branch feature/ui",
+      "status": "planned"
+    },
+    {
+      "id": "rest-api",
+      "path": "api/ (planned, directory not present in repo)",
+      "role": "Planned service — .NET Minimal API exposing readings over HTTP",
+      "entrypoints": [],
+      "tests": [],
+      "constraints": [
+        "Not implemented — no source files exist in the repo",
+        "Planned endpoints: GET /readings, GET /readings/latest, GET /readings?from=&to="
+      ],
+      "evidence": "docs/PROJECT.md (раздел \"Технологический стек\", .NET Consumer / REST API)",
+      "status": "planned"
+    },
+    {
+      "id": "dashboard-ui",
+      "path": "ui/ (exists only on branch feature/ui, not in main)",
+      "role": "Planned frontend — Vue 3 + Vite dashboard, not yet wired to a real backend",
+      "entrypoints": ["ui/src/main.ts (on branch feature/ui)"],
+      "tests": ["ui/src/__tests__/App.spec.ts (on branch feature/ui)"],
+      "constraints": [
+        "Scaffold only: App.vue, router, Pinia counter-store stub, AppScaffold/SideBar components, MainPage",
+        "Not merged into main; not connected to REST API",
+        "Stack diverges from the original plan (Nuxt 4 -> Vue 3 + Vite)"
+      ],
+      "evidence": "docs/PROJECT.md (раздел \"Веб-дашборд\"); ui/package.json on branch feature/ui",
+      "status": "planned"
+    }
+  ],
+  "edges": [
+    {
+      "from": "docker-compose",
+      "to": "mqtt-broker",
+      "type": "calls",
+      "evidence": "docker-compose.yml:2-9 (service mqtt-broker)"
+    },
+    {
+      "from": "docker-compose",
+      "to": "fake-sensor",
+      "type": "calls",
+      "evidence": "docker-compose.yml:11-16 (service simulator, build: sensor, depends_on: mqtt-broker)"
+    },
+    {
+      "from": "fake-sensor",
+      "to": "mqtt-broker",
+      "type": "publishes",
+      "evidence": "sensor/simulator.py:83-87 (client.publish to topic gateway/{GATEWAY_ID}/{metric})"
+    },
+    {
+      "from": "dotnet-consumer",
+      "to": "mqtt-broker",
+      "type": "subscribes",
+      "evidence": "unknown — planned per docs/PROJECT.md, no consumer code exists yet"
+    },
+    {
+      "from": "dotnet-consumer",
+      "to": "timescaledb",
+      "type": "writes",
+      "evidence": "unknown — planned per docs/PROJECT.md, no consumer code exists yet"
+    },
+    {
+      "from": "rest-api",
+      "to": "timescaledb",
+      "type": "reads",
+      "evidence": "unknown — planned per docs/PROJECT.md, no API code exists yet"
+    },
+    {
+      "from": "dashboard-ui",
+      "to": "rest-api",
+      "type": "calls",
+      "evidence": "unknown — planned HTTP polling per docs/PROJECT.md; axios is a dependency on branch feature/ui but no API call is wired up"
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-sensor-publish",
+      "trigger": "Таймер в sensor/simulator.py: цикл каждые PUBLISH_INTERVAL_SEC секунд (по умолчанию 5с)",
+      "steps": ["fake-sensor", "mqtt-broker"],
+      "outcome": "Сообщение доставлено в топик Mosquitto (gateway/{id}/{metric}). Подписчиков нет — цепочка обрывается на брокере, т.к. consumer не реализован.",
+      "status": "implemented"
+    },
+    {
+      "id": "flow-compose-up",
+      "trigger": "docker compose up",
+      "steps": ["docker-compose", "mqtt-broker", "fake-sensor"],
+      "outcome": "Брокер и симулятор поднимаются и работают; остальной пайплайн (БД, consumer, API, дашборд) не поднимается, т.к. отсутствует в docker-compose.yml.",
+      "status": "implemented"
+    },
+    {
+      "id": "flow-e2e-target",
+      "trigger": "fake-sensor публикует показание (целевой e2e-поток из docs/PROJECT.md, не реализован полностью)",
+      "steps": ["fake-sensor", "mqtt-broker", "dotnet-consumer", "timescaledb", "rest-api", "dashboard-ui"],
+      "outcome": "Целевой результат — обновление графика на дашборде в реальном времени. Сейчас реализованы только первые два шага (fake-sensor -> mqtt-broker); остальное спланировано, но не построено.",
+      "status": "planned"
+    }
+  ]
+}

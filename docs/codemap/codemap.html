@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SimpleMQTTMonitoring — Code Map</title>
+<style>
+  :root{
+    --bg:#0a0a0b;
+    --panel:#131315;
+    --panel-2:#18181b;
+    --border:#26262a;
+    --text:#e9e9ea;
+    --text-dim:#9b9ba3;
+    --text-faint:#5c5c64;
+    --accent:#c9a876;
+    --accent-soft:#c9a87633;
+    --accent-2:#6fcbb8;
+    --accent-2-soft:#6fcbb822;
+    --planned:#5c5c64;
+    --planned-soft:#5c5c6433;
+    --danger:#c96a6a;
+    --radius:10px;
+    --mono:"SF Mono",Consolas,"Cascadia Mono",monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#f5f4f1;
+    --panel:#ffffff;
+    --panel-2:#f0efec;
+    --border:#ddd9d1;
+    --text:#1b1b1d;
+    --text-dim:#5c5c64;
+    --text-faint:#8c8c94;
+    --accent:#a5763c;
+    --accent-soft:#a5763c22;
+    --accent-2:#238573;
+    --accent-2-soft:#23857322;
+    --planned:#b3b0a8;
+    --planned-soft:#b3b0a833;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  header{
+    display:flex;align-items:center;gap:16px;padding:10px 18px;
+    border-bottom:1px solid var(--border);background:var(--panel);flex-wrap:wrap;
+  }
+  header h1{font-size:14px;font-weight:600;letter-spacing:.02em;margin:0;white-space:nowrap;}
+  header h1 span{color:var(--text-faint);font-weight:400;}
+  .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);font-family:var(--mono);}
+  .meta b{color:var(--text-dim);font-weight:600;}
+  .meta a{color:var(--accent);text-decoration:none;}
+  .meta a:hover{text-decoration:underline;}
+  .status-pill{
+    padding:2px 9px;border-radius:100px;border:1px solid var(--accent-soft);
+    background:var(--accent-soft);color:var(--accent);font-size:11px;font-family:var(--mono);
+  }
+  .spacer{flex:1;}
+  .icon-btn{
+    background:transparent;border:1px solid var(--border);color:var(--text-dim);
+    border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;
+    display:flex;align-items:center;gap:6px;white-space:nowrap;
+  }
+  .icon-btn:hover{color:var(--text);border-color:var(--text-faint);}
+  .icon-btn.active{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft);}
+
+  #about{
+    border-bottom:1px solid var(--border);background:var(--panel-2);
+    overflow:hidden;max-height:0;transition:max-height .25s ease;
+  }
+  #about.open{max-height:520px;}
+  #about .inner{padding:16px 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;font-size:12.5px;line-height:1.55;color:var(--text-dim);}
+  #about h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);}
+  #about p{margin:0;color:var(--text);}
+  #about .full-link{grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px;margin-top:2px;}
+  #about .full-link a{color:var(--accent);}
+
+  #main{flex:1;display:flex;min-height:0;position:relative;}
+
+  #sidebar{
+    width:280px;flex-shrink:0;border-right:1px solid var(--border);background:var(--panel);
+    display:flex;flex-direction:column;transition:margin-left .2s ease;overflow:hidden;
+  }
+  #sidebar.collapsed{margin-left:-280px;}
+  .sb-section{padding:12px 14px;border-bottom:1px solid var(--border);}
+  .sb-section h4{margin:0 0 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);}
+  #search{
+    width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:7px 10px;font-size:12.5px;font-family:inherit;
+  }
+  #search:focus{outline:none;border-color:var(--accent);}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+  .legend-badge{
+    width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-size:9.5px;font-family:var(--mono);font-weight:700;border:1px solid var(--border);flex-shrink:0;
+  }
+  .toggle-row{display:flex;gap:6px;}
+  .toggle-row .icon-btn{flex:1;justify-content:center;}
+  #node-list, #flow-list{max-height:220px;overflow-y:auto;}
+  .list-item{
+    padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12px;color:var(--text-dim);
+    display:flex;justify-content:space-between;align-items:center;gap:6px;
+  }
+  .list-item:hover{background:var(--panel-2);color:var(--text);}
+  .list-item.selected{background:var(--accent-soft);color:var(--accent);}
+  .list-item .tag{font-size:9.5px;font-family:var(--mono);color:var(--text-faint);}
+  .dim-hidden{display:none !important;}
+  .shortcuts{font-size:11px;color:var(--text-faint);line-height:1.9;font-family:var(--mono);}
+  .shortcuts kbd{background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--text-dim);}
+
+  #canvas-wrap{flex:1;position:relative;overflow:hidden;background:
+    radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/28px 28px;}
+  svg#graph{width:100%;height:100%;cursor:grab;}
+  svg#graph.grabbing{cursor:grabbing;}
+
+  .node-rect{fill:var(--panel);stroke:var(--border);stroke-width:1.3;rx:10;transition:opacity .15s, stroke .15s;}
+  .node-rect.planned{stroke-dasharray:4 3;}
+  .node-group{cursor:pointer;}
+  .node-group.dimmed{opacity:.18;}
+  .node-group.selected .node-rect{stroke:var(--accent);stroke-width:2;}
+  .node-group.in-path .node-rect{stroke:var(--accent-2);stroke-width:2;}
+  .node-title{fill:var(--text);font-size:12.5px;font-weight:600;font-family:inherit;}
+  .node-sub{fill:var(--text-faint);font-size:10px;font-family:var(--mono);}
+  .node-badge-text{font-size:9.5px;font-weight:700;font-family:var(--mono);}
+  .status-dot{r:3.5;}
+  .status-dot.implemented{fill:var(--accent-2);}
+  .status-dot.planned{fill:var(--planned);}
+
+  .edge-path{fill:none;stroke:var(--text-faint);stroke-width:1.4;marker-end:url(#arrow);transition:opacity .15s,stroke .15s;}
+  .edge-path.planned{stroke-dasharray:3 3;opacity:.55;}
+  .edge-path.dimmed{opacity:.08;}
+  .edge-path.in-path{stroke:var(--accent-2);stroke-width:2.2;opacity:1;}
+  .edge-label{fill:var(--text-faint);font-size:9px;font-family:var(--mono);}
+  .edge-label.dimmed{opacity:.1;}
+
+  #minimap{
+    position:absolute;right:14px;bottom:14px;width:150px;height:110px;background:var(--panel);
+    border:1px solid var(--border);border-radius:8px;overflow:hidden;opacity:.9;
+  }
+  #minimap svg{width:100%;height:100%;}
+  #minimap-viewport{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2;}
+
+  #zoom-controls{position:absolute;left:14px;bottom:14px;display:flex;flex-direction:column;gap:4px;}
+  #zoom-controls button{
+    width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    color:var(--text-dim);cursor:pointer;font-size:14px;
+  }
+  #zoom-controls button:hover{color:var(--text);}
+
+  #detail{
+    position:absolute;top:0;right:-380px;width:360px;height:100%;background:var(--panel);
+    border-left:1px solid var(--border);transition:right .2s ease;overflow-y:auto;padding:18px;
+    font-size:12.5px;line-height:1.6;
+  }
+  #detail.open{right:0;}
+  #detail h2{margin:0 0 4px;font-size:15px;}
+  #detail .role{color:var(--text-dim);margin-bottom:14px;}
+  #detail h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:16px 0 6px;}
+  #detail ul{margin:0;padding-left:16px;color:var(--text-dim);}
+  #detail li{margin-bottom:4px;}
+  #detail a.src-link{
+    display:inline-block;margin-top:4px;color:var(--accent);text-decoration:none;font-family:var(--mono);font-size:11.5px;
+    word-break:break-all;
+  }
+  #detail a.src-link:hover{text-decoration:underline;}
+  #detail .close-btn{float:right;background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;}
+  #detail .status-tag{
+    display:inline-block;padding:2px 8px;border-radius:100px;font-size:10.5px;font-family:var(--mono);margin-bottom:10px;
+  }
+  #detail .status-tag.implemented{background:var(--accent-2-soft);color:var(--accent-2);}
+  #detail .status-tag.planned{background:var(--planned-soft);color:var(--text-dim);}
+  #detail .flow-steps{display:flex;flex-direction:column;gap:4px;}
+  #detail .flow-step{padding:6px 9px;background:var(--panel-2);border-radius:7px;font-size:11.5px;font-family:var(--mono);color:var(--text-dim);}
+
+  #delta-banner{
+    position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--border);border-radius:100px;padding:6px 16px;font-size:11.5px;color:var(--text-dim);
+    display:none;box-shadow:0 4px 18px rgba(0,0,0,.35);
+  }
+  #delta-banner.show{display:block;}
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+
+  #toast{
+    position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--border);padding:7px 14px;border-radius:8px;font-size:12px;color:var(--text-dim);
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+  }
+  #toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SimpleMQTTMonitoring <span>/ Industrial Sensor Monitor — Code Map</span></h1>
+    <div class="meta">
+      <span><b>commit</b> <a id="meta-commit" href="#" target="_blank" rel="noopener"></a></span>
+      <span><b>version</b> 0.1.0</span>
+      <span><b>generated</b> <span id="meta-time"></span></span>
+      <a id="meta-repo" href="#" target="_blank" rel="noopener">GitHub →</a>
+    </div>
+    <span class="status-pill">development</span>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="btn-about">ⓘ О проекте</button>
+    <button class="icon-btn" id="btn-sidebar">☰ Панель</button>
+    <button class="icon-btn" id="btn-theme">☾ Тема</button>
+    <button class="icon-btn" id="btn-fullscreen">⤢ Fullscreen (F)</button>
+  </header>
+
+  <div id="about">
+    <div class="inner">
+      <div>
+        <h3>Задача</h3>
+        <p>Мониторинг промышленного датчика в реальном времени: симулированный датчик → MQTT →
+        БД временных рядов → REST API → веб-дашборд. Учебно-боевой IIoT-проект.</p>
+      </div>
+      <div>
+        <h3>Команда</h3>
+        <p>Кирилл — технический лид, архитектура, фронтенд.<br>Друг — бэкенд (.NET, PostgreSQL, инфраструктура).</p>
+      </div>
+      <div>
+        <h3>Стек</h3>
+        <p>Python (симулятор) · Mosquitto 2.x · .NET 8 (Worker + Minimal API, план) · PostgreSQL +
+        TimescaleDB (план) · Vue 3 + Vite (дашборд, ветка feature/ui) · Docker Compose.</p>
+      </div>
+      <div>
+        <h3>Статус</h3>
+        <p>Реализовано: MQTT-брокер + симулятор датчика. В разработке/спланировано: consumer, БД,
+        REST API, дашборд.</p>
+      </div>
+      <div class="full-link">
+        Источник этой информации и полный актуальный контекст проекта:
+        <a href="../PROJECT.md" target="_blank">docs/PROJECT.md</a>
+        (файл пока не закоммичен — прямой ссылки на GitHub для него ещё нет)
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <aside id="sidebar">
+      <div class="sb-section">
+        <input id="search" type="text" placeholder="Поиск узлов… ( / )" />
+      </div>
+      <div class="sb-section">
+        <h4>Легенда</h4>
+        <div class="legend-row"><span class="legend-badge">C</span> Orchestration</div>
+        <div class="legend-row"><span class="legend-badge">S</span> Service</div>
+        <div class="legend-row"><span class="legend-badge">B</span> Broker</div>
+        <div class="legend-row"><span class="legend-badge">D</span> Database</div>
+        <div class="legend-row"><span class="legend-badge">F</span> Frontend</div>
+        <div class="legend-row"><svg width="12" height="12"><circle class="status-dot implemented" cx="6" cy="6" r="3.5"></circle></svg> реализовано</div>
+        <div class="legend-row"><svg width="12" height="12"><circle class="status-dot planned" cx="6" cy="6" r="3.5"></circle></svg> запланировано</div>
+      </div>
+      <div class="sb-section">
+        <h4>Детализация</h4>
+        <div class="toggle-row">
+          <button class="icon-btn active" id="lod-high">High-Level</button>
+          <button class="icon-btn" id="lod-low">Low-Level</button>
+        </div>
+      </div>
+      <div class="sb-section">
+        <h4>Drift vs codemap.lock</h4>
+        <button class="icon-btn" id="btn-delta" style="width:100%;justify-content:center;">Показать изменения</button>
+      </div>
+      <div class="sb-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+        <h4>Узлы</h4>
+        <div id="node-list"></div>
+      </div>
+      <div class="sb-section">
+        <h4>Потоки (1–5 клавиши)</h4>
+        <div id="flow-list"></div>
+      </div>
+      <div class="sb-section">
+        <h4>Экспорт</h4>
+        <div class="toggle-row">
+          <button class="icon-btn" id="export-svg">SVG</button>
+          <button class="icon-btn" id="export-png">PNG</button>
+          <button class="icon-btn" id="export-mmd">Mermaid</button>
+        </div>
+      </div>
+      <div class="sb-section">
+        <h4>Клавиши</h4>
+        <div class="shortcuts">
+          <div><kbd>/</kbd> поиск</div>
+          <div><kbd>Esc</kbd> сбросить выделение</div>
+          <div><kbd>F</kbd> fullscreen</div>
+          <div><kbd>1</kbd>–<kbd>3</kbd> потоки</div>
+          <div><kbd>R</kbd> сброс масштаба</div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="canvas-wrap">
+      <svg id="graph">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--text-faint)"></path>
+          </marker>
+        </defs>
+        <g id="viewport">
+          <g id="edges-layer"></g>
+          <g id="nodes-layer"></g>
+        </g>
+      </svg>
+      <div id="delta-banner"></div>
+      <div id="zoom-controls">
+        <button id="zoom-in">+</button>
+        <button id="zoom-out">–</button>
+        <button id="zoom-reset" title="Reset (R)">⤾</button>
+      </div>
+      <div id="minimap"><svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet">
+        <g id="minimap-nodes"></g>
+        <rect id="minimap-viewport" x="0" y="0" width="100" height="100"></rect>
+      </svg></div>
+      <div id="toast"></div>
+    </div>
+
+    <div id="detail">
+      <button class="close-btn" id="detail-close">✕</button>
+      <div id="detail-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COMMIT = "3d9aae8746a999f5ed9565c34e32d17295ab5cd3";
+const REPO = "ChuTTy32/SimpleMQTTMonitoring";
+const GH = "https://github.com/" + REPO;
+const GENERATED_AT = "2026-08-06T14:26:07Z";
+
+function ghLink(path, line){
+  if(!path) return null;
+  const kind = path.endsWith("/") ? "tree" : "blob";
+  const cleanPath = path.replace(/\/$/, "");
+  let url = GH + "/" + kind + "/" + COMMIT + "/" + cleanPath;
+  if(line) url += "#L" + line;
+  return url;
+}
+
+const DATA = {
+  nodes: [
+    {id:"docker-compose", type:"orchestration", layer:0, status:"implemented",
+     path:"docker-compose.yml", role:"Orchestration — определяет и запускает локальный стек",
+     entrypoints:["docker-compose.yml"], tests:[],
+     constraints:["Сейчас только 2 сервиса: mqtt-broker, simulator","Нет сервисов для БД/consumer/API/дашборда"],
+     evidence:"docker-compose.yml:1-17"},
+    {id:"fake-sensor", type:"service", layer:1, status:"implemented",
+     path:"sensor/", role:"Симулированный IIoT-шлюз — публикует показания по MQTT",
+     entrypoints:["sensor/simulator.py:97 (main)"], tests:[],
+     constraints:["Конфиг через .env: MQTT_BROKER, MQTT_BROKER_PORT, GATEWAY_ID, PUBLISH_INTERVAL_SEC",
+       "Ретраи подключения до готовности брокера (simulator.py:60-68)",
+       "3 метрики за тик: temperature, humidity, pressure (simulator.py:77-87)"],
+     evidence:"sensor/simulator.py"},
+    {id:"mqtt-broker", type:"broker", layer:2, status:"implemented",
+     path:"mosquitto/config/mosquitto.conf", role:"MQTT-брокер (Mosquitto 2.x) — шина между датчиком и бэкендом",
+     entrypoints:["mosquitto/config/mosquitto.conf"], tests:[],
+     constraints:["listener 1883","allow_anonymous true — без аутентификации, только для разработки"],
+     evidence:"mosquitto/config/mosquitto.conf:1-3"},
+    {id:"dotnet-consumer", type:"service", layer:3, status:"planned",
+     path:"consumer/ (директории нет в репозитории)", role:"Планируемый сервис — .NET Worker, подписка на MQTT, запись в TimescaleDB",
+     entrypoints:[], tests:[],
+     constraints:["Не реализовано — исходников нет","Планируемый стек: .NET 8 Worker Service, MQTTnet, Npgsql"],
+     evidence:"docs/PROJECT.md (раздел «Технологический стек»)"},
+    {id:"timescaledb", type:"database", layer:4, status:"planned",
+     path:"(сервиса нет в docker-compose.yml)", role:"Планируемая БД — PostgreSQL + TimescaleDB, hypertable sensor_readings",
+     entrypoints:[], tests:[],
+     constraints:["Схема спроектирована (users, controllers, sensors, metrics, system_settings, sensor_readings), но не развёрнута",
+       "SQL существует только на ветке feature/ui (docs/database-schema.md)"],
+     evidence:"docs/PROJECT.md (раздел «Схема БД»)"},
+    {id:"rest-api", type:"service", layer:5, status:"planned",
+     path:"api/ (директории нет в репозитории)", role:"Планируемый сервис — .NET Minimal API, отдаёт показания по HTTP",
+     entrypoints:[], tests:[],
+     constraints:["Не реализовано — исходников нет","Планируемые эндпоинты: GET /readings, /readings/latest, /readings?from=&to="],
+     evidence:"docs/PROJECT.md (раздел «Технологический стек»)"},
+    {id:"dashboard-ui", type:"frontend", layer:6, status:"planned",
+     path:"ui/ (только на ветке feature/ui, не в main)", role:"Планируемый фронтенд — Vue 3 + Vite дашборд",
+     entrypoints:["ui/src/main.ts (ветка feature/ui)"], tests:["ui/src/__tests__/App.spec.ts (ветка feature/ui)"],
+     constraints:["Только каркас: App.vue, router, Pinia-заглушка, AppScaffold/SideBar, MainPage",
+       "Не смёржен в main, не подключён к REST API","Стек разошёлся с планом: Nuxt 4 → Vue 3 + Vite"],
+     evidence:"docs/PROJECT.md (раздел «Веб-дашборд»)"}
+  ],
+  edges: [
+    {from:"docker-compose", to:"mqtt-broker", type:"calls", status:"implemented", evidence:"docker-compose.yml:2-9"},
+    {from:"docker-compose", to:"fake-sensor", type:"calls", status:"implemented", evidence:"docker-compose.yml:11-16"},
+    {from:"fake-sensor", to:"mqtt-broker", type:"publishes", status:"implemented", evidence:"sensor/simulator.py:83-87"},
+    {from:"dotnet-consumer", to:"mqtt-broker", type:"subscribes", status:"planned", evidence:"unknown — планируется, кода нет"},
+    {from:"dotnet-consumer", to:"timescaledb", type:"writes", status:"planned", evidence:"unknown — планируется, кода нет"},
+    {from:"rest-api", to:"timescaledb", type:"reads", status:"planned", evidence:"unknown — планируется, кода нет"},
+    {from:"dashboard-ui", to:"rest-api", type:"calls", status:"planned", evidence:"unknown — планируется, axios в зависимостях но не подключён"}
+  ],
+  flows: [
+    {id:"flow-sensor-publish", key:"1", status:"implemented",
+     trigger:"Таймер в sensor/simulator.py — тик каждые PUBLISH_INTERVAL_SEC сек (по умолчанию 5с)",
+     steps:["fake-sensor","mqtt-broker"],
+     outcome:"Сообщение доставлено в топик Mosquitto (gateway/{id}/{metric}). Подписчиков нет — цепочка обрывается на брокере."},
+    {id:"flow-compose-up", key:"2", status:"implemented",
+     trigger:"docker compose up",
+     steps:["docker-compose","mqtt-broker","fake-sensor"],
+     outcome:"Брокер и симулятор подняты и работают; остальной пайплайн не поднимается — его нет в docker-compose.yml."},
+    {id:"flow-e2e-target", key:"3", status:"planned",
+     trigger:"fake-sensor публикует показание (целевой e2e-поток из docs/PROJECT.md)",
+     steps:["fake-sensor","mqtt-broker","dotnet-consumer","timescaledb","rest-api","dashboard-ui"],
+     outcome:"Целевой результат — обновление графика на дашборде в реальном времени. Реализованы только первые два шага."}
+  ]
+};
+
+const nodeById = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
+const TYPE_BADGE = {orchestration:"C", service:"S", broker:"B", database:"D", frontend:"F"};
+
+let lodLow = false;
+let selectedNode = null;
+let selectedFlow = null;
+let zoom = 1, panX = 0, panY = 0;
+
+const NODE_W = 200, NODE_H = 64, LAYER_GAP = 130, COL_GAP = 240;
+
+function computeLayout(){
+  const byLayer = {};
+  DATA.nodes.forEach(n => { (byLayer[n.layer] = byLayer[n.layer] || []).push(n); });
+  const layers = Object.keys(byLayer).map(Number).sort((a,b)=>a-b);
+  layers.forEach(l => {
+    const row = byLayer[l];
+    const totalW = row.length * COL_GAP;
+    row.forEach((n, i) => {
+      n.x = (i - (row.length-1)/2) * COL_GAP;
+      n.y = l * LAYER_GAP;
+    });
+  });
+}
+computeLayout();
+
+const svg = document.getElementById("graph");
+const viewport = document.getElementById("viewport");
+const edgesLayer = document.getElementById("edges-layer");
+const nodesLayer = document.getElementById("nodes-layer");
+
+function statusBadgeText(n){ return n.status === "implemented" ? "" : " ·  план"; }
+
+function renderNodes(){
+  nodesLayer.innerHTML = "";
+  DATA.nodes.forEach(n => {
+    const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("class","node-group");
+    g.setAttribute("data-id", n.id);
+    g.setAttribute("transform", `translate(${n.x - NODE_W/2}, ${n.y})`);
+
+    const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("class","node-rect" + (n.status==="planned" ? " planned" : ""));
+    rect.setAttribute("width", NODE_W); rect.setAttribute("height", NODE_H); rect.setAttribute("rx", 10);
+    g.appendChild(rect);
+
+    const badge = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    badge.setAttribute("x", 10); badge.setAttribute("y", 10);
+    badge.setAttribute("width", 20); badge.setAttribute("height", 20); badge.setAttribute("rx", 5);
+    badge.setAttribute("fill", "var(--panel-2)"); badge.setAttribute("stroke", "var(--border)");
+    g.appendChild(badge);
+    const badgeText = document.createElementNS("http://www.w3.org/2000/svg","text");
+    badgeText.setAttribute("x", 20); badgeText.setAttribute("y", 24);
+    badgeText.setAttribute("text-anchor","middle"); badgeText.setAttribute("class","node-badge-text");
+    badgeText.setAttribute("fill","var(--text-dim)");
+    badgeText.textContent = TYPE_BADGE[n.type] || "?";
+    g.appendChild(badgeText);
+
+    const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    dot.setAttribute("class","status-dot " + n.status);
+    dot.setAttribute("cx", NODE_W - 16); dot.setAttribute("cy", 16);
+    g.appendChild(dot);
+
+    const title = document.createElementNS("http://www.w3.org/2000/svg","text");
+    title.setAttribute("x", 38); title.setAttribute("y", 27);
+    title.setAttribute("class","node-title");
+    title.textContent = n.id;
+    g.appendChild(title);
+
+    const sub = document.createElementNS("http://www.w3.org/2000/svg","text");
+    sub.setAttribute("x", 12); sub.setAttribute("y", 48);
+    sub.setAttribute("class","node-sub");
+    sub.textContent = lodLow ? (n.entrypoints[0] || n.path).slice(0, 30) : n.type;
+    g.appendChild(sub);
+
+    g.addEventListener("click", (e) => { e.stopPropagation(); selectNode(n.id); });
+    nodesLayer.appendChild(g);
+  });
+}
+
+function edgeAnchor(from, to){
+  const a = nodeById[from], b = nodeById[to];
+  const x1 = a.x, y1 = a.y + (b.y >= a.y ? NODE_H : 0);
+  const x2 = b.x, y2 = b.y + (b.y >= a.y ? 0 : NODE_H);
+  return {x1,y1,x2,y2};
+}
+
+function renderEdges(){
+  edgesLayer.innerHTML = "";
+  DATA.edges.forEach(e => {
+    const {x1,y1,x2,y2} = edgeAnchor(e.from, e.to);
+    const midY = (y1+y2)/2;
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+    path.setAttribute("d", d);
+    path.setAttribute("class","edge-path" + (e.status === "planned" ? " planned" : ""));
+    path.setAttribute("data-from", e.from); path.setAttribute("data-to", e.to);
+    edgesLayer.appendChild(path);
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", (x1+x2)/2 + 8); label.setAttribute("y", midY);
+    label.setAttribute("class","edge-label");
+    label.setAttribute("data-from", e.from); label.setAttribute("data-to", e.to);
+    label.textContent = e.type;
+    edgesLayer.appendChild(label);
+  });
+}
+
+function clearHighlight(){
+  document.querySelectorAll(".node-group").forEach(el => el.classList.remove("dimmed","selected","in-path"));
+  document.querySelectorAll(".edge-path").forEach(el => el.classList.remove("dimmed","in-path"));
+  document.querySelectorAll(".edge-label").forEach(el => el.classList.remove("dimmed"));
+}
+
+function blastRadius(nodeId){
+  const related = new Set([nodeId]);
+  DATA.edges.forEach(e => {
+    if(e.from === nodeId) related.add(e.to);
+    if(e.to === nodeId) related.add(e.from);
+  });
+  document.querySelectorAll(".node-group").forEach(el => {
+    if(related.has(el.dataset.id)) el.classList.remove("dimmed");
+    else el.classList.add("dimmed");
+  });
+  document.querySelectorAll(".edge-path,.edge-label").forEach(el => {
+    if(el.dataset.from === nodeId || el.dataset.to === nodeId) el.classList.remove("dimmed");
+    else el.classList.add("dimmed");
+  });
+}
+
+function highlightFlow(flow){
+  const steps = new Set(flow.steps);
+  document.querySelectorAll(".node-group").forEach(el => {
+    if(steps.has(el.dataset.id)){ el.classList.remove("dimmed"); el.classList.add("in-path"); }
+    else el.classList.add("dimmed");
+  });
+  document.querySelectorAll(".edge-path,.edge-label").forEach(el => {
+    const idx1 = flow.steps.indexOf(el.dataset.from), idx2 = flow.steps.indexOf(el.dataset.to);
+    if(idx1 !== -1 && idx2 !== -1 && Math.abs(idx1-idx2) === 1){
+      el.classList.remove("dimmed"); if(el.classList.contains("edge-path")) el.classList.add("in-path");
+    } else el.classList.add("dimmed");
+  });
+}
+
+function selectNode(id, pushHash=true){
+  clearHighlight();
+  selectedFlow = null;
+  selectedNode = id;
+  const n = nodeById[id];
+  if(!n) return;
+  document.querySelector(`.node-group[data-id="${id}"]`).classList.add("selected");
+  blastRadius(id);
+  renderDetailNode(n);
+  renderSidebarSelection();
+  if(pushHash) location.hash = "node=" + id;
+}
+
+function selectFlow(flowId, pushHash=true){
+  clearHighlight();
+  selectedNode = null;
+  const flow = DATA.flows.find(f => f.id === flowId);
+  if(!flow) return;
+  selectedFlow = flowId;
+  highlightFlow(flow);
+  renderDetailFlow(flow);
+  renderSidebarSelection();
+  if(pushHash) location.hash = "flow=" + flowId;
+}
+
+function deselectAll(){
+  clearHighlight();
+  selectedNode = null; selectedFlow = null;
+  document.getElementById("detail").classList.remove("open");
+  renderSidebarSelection();
+  history.replaceState(null, "", location.pathname + location.search);
+}
+
+function renderDetailNode(n){
+  const exists = n.status === "implemented";
+  const link = exists ? ghLink(n.path, null) : null;
+  const entryLinks = n.entrypoints.map(ep => {
+    if(!exists) return `<div>${ep}</div>`;
+    const m = ep.match(/^([^\s:]+)(?::(\d+))?/);
+    const url = m ? ghLink(m[1], m[2] || null) : null;
+    return url ? `<div><a class="src-link" href="${url}" target="_blank" rel="noopener">${ep} ↗</a></div>` : `<div>${ep}</div>`;
+  }).join("") || "<div style='color:var(--text-faint)'>—</div>";
+
+  document.getElementById("detail-body").innerHTML = `
+    <span class="status-tag ${n.status}">${n.status === "implemented" ? "реализовано" : "запланировано"}</span>
+    <h2>${n.id}</h2>
+    <div class="role">${n.role}</div>
+    <h4>Путь</h4><div>${n.path}</div>
+    <h4>Точки входа</h4>${entryLinks}
+    <h4>Ограничения</h4><ul>${n.tests.length || n.constraints.length ? n.constraints.map(c=>`<li>${c}</li>`).join("") : "<li>—</li>"}</ul>
+    ${n.tests.length ? `<h4>Тесты</h4><ul>${n.tests.map(t=>`<li>${t}</li>`).join("")}</ul>` : ""}
+    <h4>Evidence</h4><div>${n.evidence}</div>
+    ${link ? `<a class="src-link" href="${link}" target="_blank" rel="noopener">Открыть в GitHub ↗</a>` : ""}
+  `;
+  document.getElementById("detail").classList.add("open");
+}
+
+function renderDetailFlow(flow){
+  document.getElementById("detail-body").innerHTML = `
+    <span class="status-tag ${flow.status}">${flow.status === "implemented" ? "реализовано" : "запланировано"}</span>
+    <h2>Поток: ${flow.id}</h2>
+    <h4>Триггер</h4><div>${flow.trigger}</div>
+    <h4>Шаги</h4>
+    <div class="flow-steps">${flow.steps.map((s,i)=>`<div class="flow-step">${i+1}. ${s}</div>`).join("")}</div>
+    <h4>Результат</h4><div>${flow.outcome}</div>
+  `;
+  document.getElementById("detail").classList.add("open");
+}
+
+function renderSidebar(){
+  const nl = document.getElementById("node-list");
+  nl.innerHTML = "";
+  DATA.nodes.forEach(n => {
+    const div = document.createElement("div");
+    div.className = "list-item"; div.dataset.id = n.id;
+    div.innerHTML = `<span>${n.id}</span><span class="tag">${n.status === "implemented" ? "✓" : "план"}</span>`;
+    div.addEventListener("click", () => selectNode(n.id));
+    nl.appendChild(div);
+  });
+  const fl = document.getElementById("flow-list");
+  fl.innerHTML = "";
+  DATA.flows.forEach(f => {
+    const div = document.createElement("div");
+    div.className = "list-item"; div.dataset.id = f.id;
+    div.innerHTML = `<span>${f.key}. ${f.trigger.slice(0,26)}…</span><span class="tag">${f.status === "implemented" ? "✓" : "план"}</span>`;
+    div.addEventListener("click", () => selectFlow(f.id));
+    fl.appendChild(div);
+  });
+}
+
+function renderSidebarSelection(){
+  document.querySelectorAll("#node-list .list-item, #flow-list .list-item").forEach(el => {
+    el.classList.toggle("selected", el.dataset.id === selectedNode || el.dataset.id === selectedFlow);
+  });
+}
+
+function applyTransform(){
+  viewport.setAttribute("transform", `translate(${panX},${panY}) scale(${zoom})`);
+  updateMinimapViewport();
+}
+
+function fitView(){
+  const xs = DATA.nodes.map(n=>n.x), ys = DATA.nodes.map(n=>n.y);
+  const minX = Math.min(...xs) - NODE_W, maxX = Math.max(...xs) + NODE_W;
+  const minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + NODE_H + 60;
+  const w = svg.clientWidth, h = svg.clientHeight;
+  const contentW = maxX - minX, contentH = maxY - minY;
+  zoom = Math.min(w / contentW, h / contentH, 1.1);
+  panX = w/2 - (minX + contentW/2) * zoom;
+  panY = 40 - minY * zoom;
+  applyTransform();
+}
+
+function renderMinimap(){
+  const mm = document.getElementById("minimap-nodes");
+  mm.innerHTML = "";
+  const xs = DATA.nodes.map(n=>n.x), ys = DATA.nodes.map(n=>n.y);
+  const minX = Math.min(...xs) - NODE_W, maxX = Math.max(...xs) + NODE_W;
+  const minY = Math.min(...ys) - 40, maxY = Math.max(...ys) + NODE_H + 40;
+  const sx = 1000 / (maxX - minX), sy = 1000 / (maxY - minY);
+  DATA.nodes.forEach(n => {
+    const r = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    r.setAttribute("x", (n.x - NODE_W/2 - minX) * sx);
+    r.setAttribute("y", (n.y - minY) * sy);
+    r.setAttribute("width", NODE_W * sx); r.setAttribute("height", NODE_H * sy);
+    r.setAttribute("rx", 20); r.setAttribute("fill", "var(--text-faint)");
+    mm.appendChild(r);
+  });
+  window._mmScale = {sx, sy, minX, minY};
+}
+
+function updateMinimapViewport(){
+  if(!window._mmScale) return;
+  const {sx, sy, minX, minY} = window._mmScale;
+  const w = svg.clientWidth / zoom, h = svg.clientHeight / zoom;
+  const x0 = (-panX/zoom - minX) * sx;
+  const y0 = (-panY/zoom - minY) * sy;
+  const vp = document.getElementById("minimap-viewport");
+  vp.setAttribute("x", x0); vp.setAttribute("y", y0);
+  vp.setAttribute("width", w * sx); vp.setAttribute("height", h * sy);
+}
+
+let dragging = false, dragStart = {x:0,y:0}, panStart = {x:0,y:0};
+svg.addEventListener("mousedown", (e) => {
+  dragging = true; svg.classList.add("grabbing");
+  dragStart = {x:e.clientX, y:e.clientY}; panStart = {x:panX, y:panY};
+});
+window.addEventListener("mousemove", (e) => {
+  if(!dragging) return;
+  panX = panStart.x + (e.clientX - dragStart.x);
+  panY = panStart.y + (e.clientY - dragStart.y);
+  applyTransform();
+});
+window.addEventListener("mouseup", () => { dragging = false; svg.classList.remove("grabbing"); });
+svg.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  zoom = Math.min(Math.max(zoom * delta, 0.3), 3);
+  applyTransform();
+}, {passive:false});
+svg.addEventListener("click", (e) => { if(e.target === svg) deselectAll(); });
+
+document.getElementById("zoom-in").addEventListener("click", () => { zoom = Math.min(zoom*1.2, 3); applyTransform(); });
+document.getElementById("zoom-out").addEventListener("click", () => { zoom = Math.max(zoom*0.8, 0.3); applyTransform(); });
+document.getElementById("zoom-reset").addEventListener("click", fitView);
+
+document.getElementById("btn-about").addEventListener("click", () => {
+  document.getElementById("about").classList.toggle("open");
+});
+document.getElementById("btn-sidebar").addEventListener("click", () => {
+  document.getElementById("sidebar").classList.toggle("collapsed");
+});
+document.getElementById("btn-theme").addEventListener("click", () => {
+  const html = document.documentElement;
+  const cur = html.getAttribute("data-theme");
+  html.setAttribute("data-theme", cur === "light" ? "dark" : "light");
+});
+document.getElementById("btn-fullscreen").addEventListener("click", toggleFullscreen);
+function toggleFullscreen(){
+  if(!document.fullscreenElement) document.getElementById("app").requestFullscreen().catch(()=>{});
+  else document.exitFullscreen();
+}
+
+document.getElementById("lod-high").addEventListener("click", () => setLod(false));
+document.getElementById("lod-low").addEventListener("click", () => setLod(true));
+function setLod(low){
+  lodLow = low;
+  document.getElementById("lod-high").classList.toggle("active", !low);
+  document.getElementById("lod-low").classList.toggle("active", low);
+  renderNodes();
+  if(selectedNode) blastRadius(selectedNode), document.querySelector(`.node-group[data-id="${selectedNode}"]`)?.classList.add("selected");
+  if(selectedFlow) highlightFlow(DATA.flows.find(f=>f.id===selectedFlow));
+}
+
+document.getElementById("btn-delta").addEventListener("click", () => {
+  const banner = document.getElementById("delta-banner");
+  banner.textContent = "Предыдущий codemap.lock не найден — это первая (базовая) генерация карты, дрифта нет. Все узлы отмечены как новые.";
+  banner.classList.toggle("show");
+});
+
+document.getElementById("detail-close").addEventListener("click", deselectAll);
+
+document.getElementById("search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll("#node-list .list-item").forEach(el => {
+    el.classList.toggle("dim-hidden", q && !el.dataset.id.toLowerCase().includes(q));
+  });
+  document.querySelectorAll(".node-group").forEach(el => {
+    const match = !q || el.dataset.id.toLowerCase().includes(q);
+    el.style.opacity = match ? "" : "0.15";
+  });
+});
+
+window.addEventListener("keydown", (e) => {
+  if(e.target.tagName === "INPUT") { if(e.key === "Escape") e.target.blur(); return; }
+  if(e.key === "/"){ e.preventDefault(); document.getElementById("search").focus(); }
+  else if(e.key === "Escape") deselectAll();
+  else if(e.key.toLowerCase() === "f") toggleFullscreen();
+  else if(e.key.toLowerCase() === "r") fitView();
+  else if(["1","2","3","4","5"].includes(e.key)){
+    const flow = DATA.flows.find(f => f.key === e.key);
+    if(flow) selectFlow(flow.id);
+  }
+});
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+document.getElementById("export-svg").addEventListener("click", () => {
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const blob = new Blob([new XMLSerializer().serializeToString(clone)], {type:"image/svg+xml"});
+  downloadBlob(blob, "codemap.svg");
+});
+document.getElementById("export-png").addEventListener("click", () => {
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const xml = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([xml], {type:"image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = svg.clientWidth * 2; canvas.height = svg.clientHeight * 2;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg");
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(b => downloadBlob(b, "codemap.png"));
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+});
+document.getElementById("export-mmd").addEventListener("click", () => {
+  let mmd = "graph TD\n";
+  DATA.nodes.forEach(n => { mmd += `  ${n.id}["${n.id}\\n(${n.status})"]\n`; });
+  DATA.edges.forEach(e => { mmd += `  ${e.from} -->|${e.type}${e.status==="planned"?" · planned":""}| ${e.to}\n`; });
+  downloadBlob(new Blob([mmd], {type:"text/plain"}), "codemap.mmd");
+});
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  showToast("Экспортировано: " + name);
+}
+
+function init(){
+  document.getElementById("meta-commit").textContent = COMMIT.slice(0,10);
+  document.getElementById("meta-commit").href = GH + "/commit/" + COMMIT;
+  document.getElementById("meta-time").textContent = GENERATED_AT.replace("T"," ").replace("Z"," UTC");
+  document.getElementById("meta-repo").href = GH;
+
+  renderNodes();
+  renderEdges();
+  renderSidebar();
+  renderMinimap();
+  fitView();
+
+  const hash = location.hash.replace("#","");
+  if(hash.startsWith("node=")) selectNode(hash.slice(5), false);
+  else if(hash.startsWith("flow=")) selectFlow(hash.slice(5), false);
+}
+window.addEventListener("resize", () => { renderMinimap(); fitView(); });
+init();
+</script>
+</body>
+</html>

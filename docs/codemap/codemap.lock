@@ -1,0 +1,39 @@
+{
+  "commit": "3d9aae8746a999f5ed9565c34e32d17295ab5cd3",
+  "branch": "main",
+  "working_tree_dirty": true,
+  "dirty_paths": [
+    "README.MD (modified, uncommitted)",
+    "AGENTS.md (untracked)",
+    "docs/ (untracked)"
+  ],
+  "generated_at": "2026-08-06T14:26:07Z",
+  "scope": [
+    "sensor/",
+    "mosquitto/",
+    "docker-compose.yml",
+    "docs/*.md",
+    "README.MD",
+    "AGENTS.md",
+    ".gitignore"
+  ],
+  "excluded": [
+    ".git/",
+    "ui/ — not present on branch main (exists only on branch feature/ui, out of scope for this snapshot)",
+    "docs/codemap/ — generated output, excluded from its own fingerprint",
+    "sensor/.env — gitignored local secret/config file, excluded from fingerprint"
+  ],
+  "fingerprint_algorithm": "sha256 over sorted file list per module; for each file, hash the UTF-8 relative path concatenated with raw file bytes, accumulated into one running sha256 digest per module",
+  "module_fingerprints": {
+    "sensor": "f1add9bbe90a227fa34439a55a689690fa1a6ca6167d297ff2f98bf2349b1419",
+    "mosquitto": "468e940351bb3306aaeb8f5d8f19ca44c92c57292936f0700c8f1d691aba3c82",
+    "docker-compose.yml": "bddcb57eb13d6480a138c1b5adbaa1da50e7c3bc55a124b0a4ffa1789bb7962f",
+    "docs (*.md)": "5856b11260705545f3e61d4134f08a692691c36e5533b8c36bc7c0d1e4e264d2",
+    "root-config (README.MD, AGENTS.md, .gitignore)": "3127122ac25d8b0bb76320777e8643fdd6a7643fcec1c0378a954f5f985b094e"
+  },
+  "planned_modules_without_fingerprint": [
+    "consumer/ — directory does not exist, no fingerprint possible",
+    "api/ — directory does not exist, no fingerprint possible",
+    "ui/ — directory does not exist on this branch (main); real content lives on branch feature/ui and is out of scope for this commit-scoped snapshot"
+  ]
+}
