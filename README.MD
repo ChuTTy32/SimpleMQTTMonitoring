@@ -4,6 +4,7 @@
 веб-дашборда — MQTT → Docker → TimescaleDB → .NET → веб-интерфейс.
 
 **Таск-трекер (Jira):** https://chutty.atlassian.net/browse/KAN-1
+**Roadmap Проекта:** 
 
 ## Что это
 
