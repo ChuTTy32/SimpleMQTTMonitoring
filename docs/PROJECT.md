@@ -42,6 +42,12 @@
 `mqtt-broker`, `simulator`, `db` (TimescaleDB) и `migrate` (одноразовый прогон схемы) — сервисов
 для consumer/API/дашборда в `docker-compose.yml` ещё нет.
 
+**`Makefile`** (2026-08-08) — обёртка над `docker compose` для повседневных команд: `make up`,
+`make down`, `make ps`, `make logs` / `make logs-one SERVICE=db`, `make migrate-up` /
+`make migrate-down` / `make migrate-version`, `make db-shell` (psql внутрь `db`). `make` без
+аргументов — список команд (`make help`). Переменные окружения подхватываются из корневого
+`.env`.
+
 ## Статус по модулям (факт на 2026-08-08)
 
 | # | Модуль | Статус | Комментарий |
@@ -256,7 +262,9 @@ SQL-запросов *для самого API*. Это не миграции, а
 ## Структура репозитория (main, факт)
 
 ```
-├── docker-compose.yml                  # только mqtt-broker + simulator
+├── docker-compose.yml                  # mqtt-broker, simulator, db, migrate
+├── Makefile                             # обёртка над docker compose, см. выше
+├── .env / .env.example                  # POSTGRES_USER/PASSWORD/DB, .env в .gitignore
 ├── SimpleMQTTMonitoring.code-workspace  # multi-root workspace для VS Code
 ├── AGENTS.md
 ├── README.MD
