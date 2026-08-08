@@ -27,7 +27,7 @@
         |
         | INSERT
         v
-[PostgreSQL + TimescaleDB (Docker)]   <- ещё не развёрнут (схема описана)
+[PostgreSQL + TimescaleDB (Docker)]   <- сервис в docker-compose.yml, живьём не проверен
         |
         | SELECT
         v
@@ -38,17 +38,17 @@
 [Web Dashboard (Vue 3 + Vite)]        <- каркас в main/ui/, не подключён к бэкенду
 ```
 
-Вся система должна подниматься одной командой: `docker compose up`. Сейчас так
-поднимаются только `mqtt-broker` и `simulator` — сервисов для БД/consumer/API/дашборда
-в `docker-compose.yml` ещё нет.
+Вся система должна подниматься одной командой: `docker compose up`. Сейчас так поднимаются
+`mqtt-broker`, `simulator`, `db` (TimescaleDB) и `migrate` (одноразовый прогон схемы) — сервисов
+для consumer/API/дашборда в `docker-compose.yml` ещё нет.
 
-## Статус по модулям (факт на 2026-08-06, после мержа `feature/ui` → `main`)
+## Статус по модулям (факт на 2026-08-08)
 
 | # | Модуль | Статус | Комментарий |
 |---|--------|--------|-------------|
 | 0 | Подготовка | ✅ сделано | Репозиторий, README, ветки |
 | 1 | Docker + Mosquitto | ✅ сделано | Брокер поднимается в Docker, топики рабочие |
-| 2 | PostgreSQL + TimescaleDB | 🟡 спроектировано | Схема БД в `docs/database-schema.md` (в `main`), сервис в `docker-compose.yml` ещё не добавлен |
+| 2 | PostgreSQL + TimescaleDB | 🟡 сервис в compose, не проверен реальным запуском | `db` (`timescale/timescaledb`) + `migrate` (`db/migrations/000001_init_schema.*`) добавлены в `docker-compose.yml`; `docker compose config` проходит без ошибок, но `docker compose up` живьём не проверялся — Docker недоступен в среде, где это писалось |
 | 3 | Fake Sensor | ✅ сделано | Публикует 3 метрики; `sensor/Dockerfile` собирается из локального `sensor/.env` (gitignored) — см. «Известные проблемы» про `.env-example` как шаблон |
 | 4 | .NET Consumer | ⬜ не начато | Директория `consumer/` создана (только `.gitkeep`), кода нет |
 | 5 | REST API | ⬜ не начато | Директория `api/` создана (только `.gitkeep`), кода нет |
@@ -89,8 +89,15 @@
 
 ### PostgreSQL + TimescaleDB
 
-- Не развёрнут. Схема спроектирована и задокументирована в `docs/database-schema.md`
-  (теперь в `main`, см. раздел «Схема БД» ниже), но сервиса в `docker-compose.yml` пока нет.
+- Сервис `db` (`timescale/timescaledb:latest-pg16`) и `migrate` (`migrate/migrate:v4.17.1`)
+  добавлены в `docker-compose.yml` (2026-08-08). Миграция — `db/migrations/000001_init_schema.up/down.sql`,
+  зеркало SQL-блока из `docs/database-schema.md` (см. раздел «Миграции БД» ниже за архитектурой
+  разделения migrate/api/consumer).
+- Конфиг — через корневой `.env` (`POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`), шаблон —
+  `.env.example`, оба с рабочими dev-значениями (не мусорными плейсхолдерами, в отличие от
+  прежней проблемы с `sensor/.env-example` — см. «Известные проблемы»). `.env` в `.gitignore`.
+- `docker compose config` проходит без ошибок (синтаксис/интерполяция переменных валидны), но
+  реальный `docker compose up` не проверялся — Docker недоступен в среде, где это писалось.
 
 ### .NET Consumer — `consumer/`
 
@@ -109,10 +116,8 @@
   - **pgx v5** (`jackc/pgx`) + `pgxpool` — драйвер PostgreSQL/TimescaleDB, нативный протокол,
     без cgo.
   - **sqlc** — генерация типобезопасных Go-структур и функций из SQL-запросов
-    (`docs/database-schema.md` как источник схемы). Соответствует правилу проекта
-    «нет типа — напиши интерфейс»: никакого `interface{}`/сырых `map[string]any` от БД.
-  - **golang-migrate/migrate** — версионированные миграции поверх SQL из
-    `docs/database-schema.md`.
+    (`db/migrations/` как источник схемы, см. «Миграции БД» ниже). Соответствует правилу
+    проекта «нет типа — напиши интерфейс»: никакого `interface{}`/сырых `map[string]any` от БД.
   - **golang-jwt/jwt/v5** + `golang.org/x/crypto/bcrypt` — аутентификация и роли
     (`users.role`: `admin`/`operator`/`viewer` уже есть в схеме).
   - **go-playground/validator/v10** — валидация входных DTO на границе API.
@@ -135,7 +140,6 @@
     │   ├── repository/    # sqlc-сгенерированный доступ к БД
     │   ├── model/          # DTO / доменные типы
     │   └── middleware/     # auth, логирование, CORS
-    ├── migrations/          # golang-migrate SQL
     ├── go.mod
     └── Dockerfile           # multi-stage: golang:1.23-alpine → distroless
     ```
@@ -222,6 +226,33 @@ REST API — `POST /controllers`, `POST /sensors` с `name`/`topic`/`mqtt_gatewa
 вида `gateway/{id}/{metric}`) уже спроектирован с расчётом на эту схему (топик хранится в
 `sensors.topic`, `gateway_id` — в `controllers.mqtt_gateway_id`).
 
+## Миграции БД: независимая инфраструктура, не часть `api/` (решение от 2026-08-08)
+
+Изначально миграции планировались как часть Go-стека REST API (`golang-migrate` внутри `api/`).
+Это архитектурная ошибка: Consumer (.NET) тоже пишет в ту же БД, но не имеет отношения к тому,
+как и когда применяются миграции API-сервиса — получается скрытая, неявная зависимость Consumer
+от деплоя/раннего запуска API. Схема БД — общая инфраструктура, а не собственность одного из
+бэкенд-сервисов.
+
+**Правильная модель:**
+
+- **`db/migrations/`** — каталог в корне репозитория (рядом с `api/`, `consumer/`, `sensor/`),
+  единственный источник правды по схеме. Содержимое — версионированные `.sql`-файлы в конвенции
+  `golang-migrate` (`{версия}_{название}.up.sql` / `.down.sql`). Первая миграция
+  `000001_init_schema.up/down.sql` создана и зеркалит SQL-блок из `docs/database-schema.md`.
+- **Отдельный one-shot сервис `migrate` в `docker-compose.yml`** — официальный образ
+  `migrate/migrate` (CLI `golang-migrate`, не библиотека, вшитая в Go-код API), применяет
+  `db/migrations/` к поднятой БД и завершается (`exit 0`).
+- **И `consumer`, и `api` объявляют `depends_on: migrate` с `condition: service_completed_successfully`**
+  (штатная фича Docker Compose для init/миграционных контейнеров) — оба сервиса стартуют только
+  после успешной миграции, оба зависят от неё одинаково, ни один её не «владеет».
+
+**Что остаётся внутри `api/`:** только **sqlc** — кодогенерация типизированных Go-структур из
+SQL-запросов *для самого API*. Это не миграции, а инструмент конкретного сервиса: Consumer читает
+ту же схему своими средствами (Dapper/EF Core), никак не завязан на sqlc. Кодогенерация —
+особенность реализации одного сервиса, миграции — общая инфраструктура; смешивать их в один слой
+не стоит.
+
 ## Структура репозитория (main, факт)
 
 ```
@@ -235,6 +266,9 @@ REST API — `POST /controllers`, `POST /sensors` с `name`/`topic`/`mqtt_gatewa
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env-example
+├── db/migrations/                       # независимая инфраструктура схемы БД, см. «Миграции БД»
+│   ├── 000001_init_schema.up.sql        # не часть api/ или consumer/
+│   └── 000001_init_schema.down.sql
 ├── consumer/                            # только .gitkeep, кода нет
 ├── api/                                 # только .gitkeep, кода нет
 ├── ui/                                  # Vue 3 + Vite дашборд, каркас
@@ -292,13 +326,16 @@ Application), с промышленной автоматизацией вмес�
 
 ## Ближайшие шаги (вытекают из статуса выше)
 
-1. Проверить `docker compose up --build` реальной сборкой (не проверено — Docker недоступен в среде, где это писалось) и поправить `sensor/.env-example` на реалистичный шаблон
-2. Добавить сервис PostgreSQL+TimescaleDB в `docker-compose.yml`, применить схему из `database-schema.md`
-3. Начать .NET Consumer: подписка на `gateway/+/+`, запись в `sensor_readings`; **не создавать**
-   `controllers`/`sensors` автоматически на неизвестный `gateway_id`/`topic` — дропать и логировать
-   (см. «Решение о провижининге устройств» выше)
-4. Начать REST API на Go (chi + pgx + sqlc, см. раздел «REST API — `api/`» выше); заложить
-   CRUD-эндпоинты для `controllers`/`sensors` (провижининг устройств — обязателен, не только чтение
-   `sensor_readings`) и управление `alert_events.resolved_at`; решить HTTP polling vs WebSocket,
-   задокументировать решение здесь
+1. Проверить `docker compose up --build` реальной сборкой (не проверено — Docker недоступен в среде, где это писалось), включая новые сервисы `db`/`migrate`, и поправить `sensor/.env-example` на реалистичный шаблон
+2. ~~Добавить сервис PostgreSQL+TimescaleDB в `docker-compose.yml`~~ — сделано (2026-08-08):
+   `db` + `migrate` в compose, `db/migrations/000001_init_schema.up/down.sql`. Осталось только
+   проверить живым запуском (см. п.1)
+3. Начать .NET Consumer: подписка на `gateway/+/+`, запись в `sensor_readings`; `depends_on:
+   migrate` с `condition: service_completed_successfully`; **не создавать** `controllers`/`sensors`
+   автоматически на неизвестный `gateway_id`/`topic` — дропать и логировать (см. «Решение о
+   провижининге устройств» выше)
+4. Начать REST API на Go (chi + pgx + sqlc, см. раздел «REST API — `api/`» выше); `depends_on:
+   migrate` аналогично Consumer; заложить CRUD-эндпоинты для `controllers`/`sensors` (провижининг
+   устройств — обязателен, не только чтение `sensor_readings`) и управление
+   `alert_events.resolved_at`; решить HTTP polling vs WebSocket, задокументировать решение здесь
 5. Подключить дашборд к реальным данным вместо заглушек
