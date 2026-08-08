@@ -31,7 +31,7 @@
         |
         | SELECT
         v
-[.NET REST API (Minimal API)]         <- ещё не реализован (только api/.gitkeep)
+[REST API (Go)]                       <- ещё не реализован (только api/.gitkeep)
         |
         | HTTP polling (возможно + WebSocket, см. ниже)
         v
@@ -99,11 +99,46 @@
 
 ### REST API — `api/`
 
-- Не начат. В плане: .NET 8 Minimal API + общий `Shared.Models` проект. По README
-  на ветке `feature/ui` упоминается также WebSocket для realtime-обновлений — это
-  **не подтверждено кодом** (в `ui/package.json` нет WebSocket-клиента), считать
-  предварительной идеей, а не решением, пока не задокументировано отдельно.
-  Директория создана (`api/.gitkeep`), исходников нет.
+- **Решение о смене стека (2026-08-08):** REST API переведён с .NET Minimal API на Go.
+  Consumer (`consumer/`) остаётся на .NET — смена стека касается только слоя API,
+  явно ограничена пользователем формулировкой «веб-апи».
+- Не начат. Директория создана (`api/.gitkeep`), исходников нет. Стек:
+  - **Go 1.23**
+  - **chi v5** — роутер. Лёгкий, идиоматичный net/http-совместимый роутинг с middleware —
+    ближайший Go-аналог по духу к .NET Minimal API, с которым уже был план.
+  - **pgx v5** (`jackc/pgx`) + `pgxpool` — драйвер PostgreSQL/TimescaleDB, нативный протокол,
+    без cgo.
+  - **sqlc** — генерация типобезопасных Go-структур и функций из SQL-запросов
+    (`docs/database-schema.md` как источник схемы). Соответствует правилу проекта
+    «нет типа — напиши интерфейс»: никакого `interface{}`/сырых `map[string]any` от БД.
+  - **golang-migrate/migrate** — версионированные миграции поверх SQL из
+    `docs/database-schema.md`.
+  - **golang-jwt/jwt/v5** + `golang.org/x/crypto/bcrypt` — аутентификация и роли
+    (`users.role`: `admin`/`operator`/`viewer` уже есть в схеме).
+  - **go-playground/validator/v10** — валидация входных DTO на границе API.
+  - **log/slog** (стандартная библиотека) — структурированное логирование.
+  - **caarlos0/env/v11** — типизированный конфиг из переменных окружения (без Viper —
+    оверкилл для одного сервиса).
+  - **testify** + `net/http/httptest` — юнит- и HTTP-тесты; `testcontainers-go` —
+    опционально для интеграционных тестов с реальным Postgres.
+  - WebSocket для realtime — по-прежнему **не решено** (см. предыдущую формулировку про
+    `feature/ui`); если решится — кандидат `coder/websocket` (бывш. `nhooyr.io/websocket`,
+    активно поддерживается, в отличие от `gorilla/websocket`).
+  - Layout (слоистая архитектура, как и на фронте):
+    ```
+    api/
+    ├── cmd/api/main.go
+    ├── internal/
+    │   ├── config/
+    │   ├── handler/       # HTTP-хендлеры, роуты chi
+    │   ├── service/       # бизнес-логика
+    │   ├── repository/    # sqlc-сгенерированный доступ к БД
+    │   ├── model/          # DTO / доменные типы
+    │   └── middleware/     # auth, логирование, CORS
+    ├── migrations/          # golang-migrate SQL
+    ├── go.mod
+    └── Dockerfile           # multi-stage: golang:1.23-alpine → distroless
+    ```
 
 ### Веб-дашборд — `ui/` (в `main`, не подключён к бэкенду)
 
@@ -217,5 +252,6 @@ Application), с промышленной автоматизацией вмес�
 1. Проверить `docker compose up --build` реальной сборкой (не проверено — Docker недоступен в среде, где это писалось) и поправить `sensor/.env-example` на реалистичный шаблон
 2. Добавить сервис PostgreSQL+TimescaleDB в `docker-compose.yml`, применить схему из `database-schema.md`
 3. Начать .NET Consumer: подписка на `gateway/+/+`, запись в `sensor_readings`
-4. Начать REST API поверх БД (решить: HTTP polling или + WebSocket, задокументировать решение здесь)
+4. Начать REST API на Go (chi + pgx + sqlc, см. раздел «REST API — `api/`» выше);
+   решить HTTP polling vs WebSocket, задокументировать решение здесь
 5. Подключить дашборд к реальным данным вместо заглушек
