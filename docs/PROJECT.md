@@ -57,7 +57,7 @@
 | 2 | PostgreSQL + TimescaleDB | 🟡 сервис в compose, не проверен реальным запуском | `db` (`timescale/timescaledb`) + `migrate` (`db/migrations/000001_init_schema.*`) добавлены в `docker-compose.yml`; `docker compose config` проходит без ошибок, но `docker compose up` живьём не проверялся — Docker недоступен в среде, где это писалось |
 | 3 | Fake Sensor | ✅ сделано | Публикует 3 метрики; `sensor/Dockerfile` собирается из локального `sensor/.env` (gitignored) — см. «Известные проблемы» про `.env-example` как шаблон |
 | 4 | .NET Consumer | ⬜ не начато | Директория `consumer/` создана (только `.gitkeep`), кода нет |
-| 5 | REST API | ⬜ не начато | Директория `api/` создана (только `.gitkeep`), кода нет |
+| 5 | REST API | 🟡 первая ручка + структура спроектирована | `GET /health` работает; полная структура — [`docs/api-architecture.md`](api-architecture.md); остальные модули не реализованы |
 | 6 | Веб-дашборд | 🟡 каркас в main, не подключён | Стек — Vue 3 + Vite (не Nuxt, см. ниже); смёржен в `main`, но не подключён к реальному API |
 | 7 | Финал / интеграция | ⬜ не начато | End-to-end пайплайн (датчик → БД → API → дашборд) пока не собран |
 
@@ -115,7 +115,11 @@
 - **Решение о смене стека (2026-08-08):** REST API переведён с .NET Minimal API на Go.
   Consumer (`consumer/`) остаётся на .NET — смена стека касается только слоя API,
   явно ограничена пользователем формулировкой «веб-апи».
-- Не начат. Директория создана (`api/.gitkeep`), исходников нет. Стек:
+- Первый шаг сделан (2026-08-08): `GET /health` на голом `net/http`, без роутера/слоёв — учебная
+  ручка, чтобы было к чему делать запрос. Полная структура (CRUD-модули + WebSocket-канал метрик,
+  дерево каталогов, маршруты, зависимости) спроектирована и задокументирована отдельно —
+  [`docs/api-architecture.md`](api-architecture.md). Реализация остальных модулей — по одному за
+  раз. Стек:
   - **Go 1.23**
   - **chi v5** — роутер. Лёгкий, идиоматичный net/http-совместимый роутинг с middleware —
     ближайший Go-аналог по духу к .NET Minimal API, с которым уже был план.
@@ -132,23 +136,13 @@
     оверкилл для одного сервиса).
   - **testify** + `net/http/httptest` — юнит- и HTTP-тесты; `testcontainers-go` —
     опционально для интеграционных тестов с реальным Postgres.
-  - WebSocket для realtime — по-прежнему **не решено** (см. предыдущую формулировку про
-    `feature/ui`); если решится — кандидат `coder/websocket` (бывш. `nhooyr.io/websocket`,
-    активно поддерживается, в отличие от `gorilla/websocket`).
-  - Layout (слоистая архитектура, как и на фронте):
-    ```
-    api/
-    ├── cmd/api/main.go
-    ├── internal/
-    │   ├── config/
-    │   ├── handler/       # HTTP-хендлеры, роуты chi
-    │   ├── service/       # бизнес-логика
-    │   ├── repository/    # sqlc-сгенерированный доступ к БД
-    │   ├── model/          # DTO / доменные типы
-    │   └── middleware/     # auth, логирование, CORS
-    ├── go.mod
-    └── Dockerfile           # multi-stage: golang:1.23-alpine → distroless
-    ```
+  - WebSocket для realtime — **решено** (2026-08-08): `github.com/coder/websocket` (бывш.
+    `nhooyr.io/websocket`, активно поддерживается, в отличие от `gorilla/websocket`), данные —
+    через Postgres `LISTEN`/`NOTIFY` (Consumer и API не связаны напрямую, общая точка — БД, тот же
+    принцип, что и для миграций). Детали — [`docs/api-architecture.md`](api-architecture.md).
+  - Layout (слоистая архитектура, как и на фронте) — полное дерево каталогов, маршруты и разбор
+    WS-канала вынесены в отдельный документ, см. [`docs/api-architecture.md`](api-architecture.md),
+    чтобы не дублировать и не расходиться с ним.
 
 ### Веб-дашборд — `ui/` (в `main`, не подключён к бэкенду)
 
@@ -283,6 +277,7 @@ SQL-запросов *для самого API*. Это не миграции, а
 └── docs/
     ├── PROJECT.md                       # этот файл
     ├── database-schema.md               # схема БД PostgreSQL + TimescaleDB
+    ├── api-architecture.md              # структура api/: CRUD-модули, WS-канал, зависимости
     ├── image/database-schema/           # диаграмма к схеме
     ├── ROADMAP-SKILL.md                 # скилл генерации карты кода
     └── codemap/                         # генерируется roadmap-скиллом, не редактируется вручную
