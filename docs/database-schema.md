@@ -3,40 +3,52 @@
 База данных — PostgreSQL с расширением TimescaleDB. Телеметрия хранится в hypertable
 `sensor_readings`, остальные таблицы — обычные реляционные таблицы с настройками системы.
 
+**Правки от 2026-08-08:**
+- Таблица `metrics` убрана — `metric_type` и пороги алертинга перенесены в `sensors`
+  (см. «Известные проблемы» ниже, почему).
+- `sensors.controller_id` стал `NOT NULL` (датчик без контроллера — невалидное состояние),
+  добавлен индекс `idx_sensors_controller_id` (FK-колонки не индексируются автоматически) и
+  `CHECK (min_threshold < max_threshold)`.
+- Добавлена таблица `alert_events` — история срабатываний порогов.
+- Диаграмма `image/database-schema/*.png` устарела и требует перегенерации вручную.
+
 ## Обзор таблиц
 
-| Таблица           | Назначение                                                     |
-| ----------------- | -------------------------------------------------------------- |
-| `users`           | Пользователи системы и их роли (`admin`, `operator`, `viewer`) |
-| `controllers`     | Физические контроллеры/шлюзы (ПЛК, ESP32 и т.п.)               |
-| `sensors`         | Датчики, привязанные к контроллеру, с MQTT-топиком             |
-| `metrics`         | Типы измеряемых величин датчика и пороговые значения           |
-| `system_settings` | Глобальные настройки системы в формате key-value               |
-| `sensor_readings` | Временные ряды показаний датчиков (TimescaleDB hypertable)     |
+| Таблица      | Назначение                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `users`           | Пользователи системы и их роли (`admin`, `operator`, `viewer`)               |
+| `controllers`     | Физические контроллеры/шлюзы (ПЛК, ESP32 и т.п.)                             |
+| `sensors`         | Датчики, привязанные к контроллеру, с MQTT-топиком и метрикой |
+| `system_settings` | Глобальные настройки системы в формате key-value                           |
+| `sensor_readings` | Временные ряды показаний датчиков (TimescaleDB hypertable)                     |
+| `alert_events` | История срабатываний порогов алертинга (`sensors.min_threshold`/`max_threshold`) |
 
-![1785458743150](image/database-schema/1785458743150.png)
+*(диаграмма устарела относительно текущей схемы, см. пометку выше)*
 
 ### `users` — пользователи и роли
 
 Учётные записи, работающие с дашбордом и API. Роль определяет уровень доступа:
 `admin` — полный доступ, `operator` — управление датчиками/контроллерами,
-`viewer` — только просмотр.
+`viewer` — только просмотр. Допустимые значения `role` зафиксированы на уровне БД (`CHECK`),
+а не только в коде приложения.
 
 ### `controllers` — контроллеры (ПЛК / шлюзы / ESP32)
 
 Физическое или виртуальное устройство, объединяющее один или несколько датчиков
-(например, шлюз на объекте). `ip_address` и `location` — служебная информация для
-идентификации устройства на площадке.
+(например, шлюз на объекте). `mqtt_gateway_id` — идентификатор шлюза из MQTT-топика
+(`gateway/{gateway_id}/{metric}`), по которому Consumer сопоставляет входящее сообщение с
+контроллером; хранится отдельно от `name`, чтобы переименование контроллера в дашборде не
+ломало приём данных. `ip_address` и `location` — служебная информация для идентификации
+устройства на площадке.
 
-### `sensors` — датчики
+### `sensors` — датчики и метрики
 
 Конкретный датчик, привязанный к контроллеру. `topic` — уникальный MQTT-топик, на который
-датчик публикует показания, `unit` — единица измерения (`°C`, `Bar`, `%` и т.д.).
-
-### `metrics` — измеряемые величины и пороги
-
-Тип метрики, которую отдаёт датчик (`temperature`, `humidity`, `pressure` и т.д.), вместе с
-допустимым диапазоном (`min_threshold` / `max_threshold`) для алертинга на дашборде.
+датчик публикует показания. Один физический MQTT-топик соответствует ровно одному типу
+измеряемой величины (`metric_type`: `temperature`, `humidity`, `pressure` и т.д.) — это
+гарантировано форматом топика (`gateway/{gateway_id}/{metric_type}`), поэтому метрика и её
+пороги алертинга (`min_threshold`/`max_threshold`) — поля самого датчика, а не отдельная
+сущность (см. «Известные проблемы»). `unit` — единица измерения (`°C`, `Bar`, `%` и т.д.).
 
 ### `system_settings` — системные настройки
 
@@ -46,8 +58,31 @@
 ### `sensor_readings` — временные ряды (телеметрия)
 
 Hypertable TimescaleDB с фактическими показаниями датчиков. Партиционируется по времени
-автоматически. Индекс `idx_sensor_readings_time` ускоряет типичный запрос "последние N
-показаний конкретного датчика".
+автоматически. `PRIMARY KEY (sensor_id, time)` — защита от дублей при повторной доставке
+сообщения. Индекс `idx_sensor_readings_time` ускоряет типичный запрос "последние N показаний
+конкретного датчика". Retention policy ограничивает хранение сырых данных (см. SQL); для
+долгих графиков используется continuous aggregate с почасовыми агрегатами вместо сканирования
+сырых точек.
+
+### `alert_events` — история срабатываний алертов
+
+Факт выхода показания за `min_threshold`/`max_threshold` датчика. `threshold_value` — снимок
+порога на момент срабатывания (не ссылка на текущее значение в `sensors`), чтобы последующее
+изменение порога не переписывало историю задним числом. `resolved_at = NULL` — алерт активен;
+частичный индекс `idx_alert_events_active` ускоряет типичный запрос "текущие активные алерты".
+
+## Известные проблемы
+
+- **Почему `metrics` убрана.** Изначально `metrics` была отдельной таблицей 1:N к `sensors`, а
+  `sensor_readings` ссылалась только на `sensor_id` — без `metric_id`. При таком дизайне ничто не
+  запрещало добавить сенсору вторую метрику, но `sensor_readings` физически не могла бы определить,
+  какой метрике принадлежит конкретное значение. Поскольку формат MQTT-топика
+  (`gateway/{gateway_id}/{metric_type}`) гарантирует связку «1 топик = 1 сенсор = 1 метрика»,
+  правильная модель — метрика как поле `sensors`, а не отдельная сущность. Если в будущем появится
+  реальный сценарий «один физический сенсор — несколько метрик» (не подтверждён форматом MQTT
+  на сегодня), пересматривать возврат к отдельной таблице с `metric_id` в `sensor_readings`.
+- **`90 days` в retention policy — плейсхолдер.** Требует решения по фактическому объёму хранения
+  сырых данных, пока не проверено на реальной нагрузке.
 
 ## SQL
 
@@ -58,42 +93,75 @@ CREATE TABLE users (
     username      VARCHAR(50) NOT NULL UNIQUE,
     email         VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role          VARCHAR(20) NOT NULL DEFAULT 'operator', -- 'admin', 'operator', 'viewer'
-    created_at    TIMESTAMPTZ DEFAULT now()
+    role          VARCHAR(20) NOT NULL DEFAULT 'operator'
+                  CHECK (role IN ('admin', 'operator', 'viewer')),
+    created_at    TIMESTAMPTZ DEFAULT now(),
+    updated_at    TIMESTAMPTZ DEFAULT now()
 );
+
+COMMENT ON TABLE  users IS 'Учётные записи, работающие с дашбордом и API';
+COMMENT ON COLUMN users.id IS 'Первичный ключ';
+COMMENT ON COLUMN users.username IS 'Логин пользователя, уникален';
+COMMENT ON COLUMN users.email IS 'Почта пользователя, уникальна';
+COMMENT ON COLUMN users.password_hash IS 'Хеш пароля (bcrypt), пароль в открытом виде не хранится';
+COMMENT ON COLUMN users.role IS 'Роль доступа: admin — полный доступ, operator — управление датчиками/контроллерами, viewer — только просмотр';
+COMMENT ON COLUMN users.created_at IS 'Дата создания учётной записи';
+COMMENT ON COLUMN users.updated_at IS 'Дата последнего изменения записи';
 
 -- 2. Контроллеры (ПЛК / Шлюзы / ESP32)
 CREATE TABLE controllers (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        VARCHAR(100) NOT NULL,
-    ip_address  VARCHAR(45),
-    location    VARCHAR(255),
-    is_active   BOOLEAN DEFAULT true,
-    created_at  TIMESTAMPTZ DEFAULT now()
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(100) NOT NULL,
+    mqtt_gateway_id VARCHAR(100) NOT NULL UNIQUE, -- gateway_id из топика gateway/{gateway_id}/{metric}
+    ip_address      VARCHAR(45),
+    location        VARCHAR(255),
+    is_active       BOOLEAN DEFAULT true,
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
--- 3. Датчики
+COMMENT ON TABLE  controllers IS 'Физическое или виртуальное устройство (шлюз/ПЛК/ESP32), объединяющее один или несколько датчиков';
+COMMENT ON COLUMN controllers.id IS 'Первичный ключ';
+COMMENT ON COLUMN controllers.name IS 'Человекочитаемое имя контроллера для дашборда, можно менять без влияния на приём MQTT-данных';
+COMMENT ON COLUMN controllers.mqtt_gateway_id IS 'gateway_id из MQTT-топика gateway/{gateway_id}/{metric}; по нему Consumer сопоставляет входящее сообщение с контроллером';
+COMMENT ON COLUMN controllers.ip_address IS 'IP-адрес устройства на площадке (справочно)';
+COMMENT ON COLUMN controllers.location IS 'Физическое расположение устройства (справочно)';
+COMMENT ON COLUMN controllers.is_active IS 'Флаг активности контроллера';
+COMMENT ON COLUMN controllers.created_at IS 'Дата создания записи';
+COMMENT ON COLUMN controllers.updated_at IS 'Дата последнего изменения записи';
+
+-- 3. Датчики (метрика и пороги — поля датчика, см. «Известные проблемы»)
 CREATE TABLE sensors (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    controller_id   UUID REFERENCES controllers(id) ON DELETE CASCADE,
+    controller_id   UUID NOT NULL REFERENCES controllers(id) ON DELETE CASCADE,
     name            VARCHAR(100) NOT NULL,
     topic           VARCHAR(255) NOT NULL UNIQUE, -- MQTT topic
+    metric_type     VARCHAR(50) NOT NULL,         -- 'temperature', 'humidity', 'pressure'
     unit            VARCHAR(20) NOT NULL,         -- '°C', 'Bar', '%'
+    min_threshold   DOUBLE PRECISION,
+    max_threshold   DOUBLE PRECISION,
     is_active       BOOLEAN DEFAULT true,
-    created_at      TIMESTAMPTZ DEFAULT now()
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now(),
+    CHECK (min_threshold IS NULL OR max_threshold IS NULL OR min_threshold < max_threshold)
 );
 
--- 4. Метрики (Типы измеряемых величин и пороговые значения)
-CREATE TABLE metrics (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sensor_id     UUID REFERENCES sensors(id) ON DELETE CASCADE,
-    metric_type   VARCHAR(50) NOT NULL, -- 'temperature', 'humidity', 'pressure'
-    min_threshold DOUBLE PRECISION,
-    max_threshold DOUBLE PRECISION,
-    created_at    TIMESTAMPTZ DEFAULT now()
-);
+CREATE INDEX idx_sensors_controller_id ON sensors (controller_id);
 
--- 5. Системные настройки (Key-Value для конфигураций)
+COMMENT ON TABLE  sensors IS 'Датчик, привязанный к контроллеру: MQTT-топик, тип метрики и пороги алертинга';
+COMMENT ON COLUMN sensors.id IS 'Первичный ключ';
+COMMENT ON COLUMN sensors.controller_id IS 'Контроллер, к которому физически подключён датчик — обязателен, датчик без контроллера не существует';
+COMMENT ON COLUMN sensors.name IS 'Человекочитаемое имя датчика для дашборда';
+COMMENT ON COLUMN sensors.topic IS 'Уникальный MQTT-топик, на который датчик публикует показания';
+COMMENT ON COLUMN sensors.metric_type IS 'Тип измеряемой величины (temperature/humidity/pressure и т.д.), однозначно задан топиком';
+COMMENT ON COLUMN sensors.unit IS 'Единица измерения (°C, Bar, % и т.д.)';
+COMMENT ON COLUMN sensors.min_threshold IS 'Нижний порог значения для алертинга, NULL — порог не задан; если оба порога заданы, min_threshold < max_threshold гарантировано CHECK';
+COMMENT ON COLUMN sensors.max_threshold IS 'Верхний порог значения для алертинга, NULL — порог не задан';
+COMMENT ON COLUMN sensors.is_active IS 'Флаг активности датчика';
+COMMENT ON COLUMN sensors.created_at IS 'Дата создания записи';
+COMMENT ON COLUMN sensors.updated_at IS 'Дата последнего изменения записи';
+
+-- 4. Системные настройки (Key-Value для конфигураций)
 CREATE TABLE system_settings (
     key         VARCHAR(100) PRIMARY KEY,
     value       TEXT NOT NULL,
@@ -101,13 +169,68 @@ CREATE TABLE system_settings (
     updated_at  TIMESTAMPTZ DEFAULT now()
 );
 
--- 6. Временные ряды (Телеметрия) — TimescaleDB Hypertable
+COMMENT ON TABLE  system_settings IS 'Глобальные настройки системы в формате key-value (интервалы опроса, флаги функциональности и т.д.)';
+COMMENT ON COLUMN system_settings.key IS 'Уникальный ключ настройки, первичный ключ таблицы';
+COMMENT ON COLUMN system_settings.value IS 'Значение настройки (хранится как текст, парсится на уровне приложения)';
+COMMENT ON COLUMN system_settings.description IS 'Пояснение назначения настройки';
+COMMENT ON COLUMN system_settings.updated_at IS 'Дата последнего изменения значения';
+
+-- 5. Временные ряды (Телеметрия) — TimescaleDB Hypertable
 CREATE TABLE sensor_readings (
     time        TIMESTAMPTZ       NOT NULL,
     sensor_id   UUID              NOT NULL REFERENCES sensors(id) ON DELETE CASCADE,
-    value       DOUBLE PRECISION  NOT NULL
+    value       DOUBLE PRECISION  NOT NULL,
+    PRIMARY KEY (sensor_id, time)
 );
+
+COMMENT ON TABLE  sensor_readings IS 'Hypertable TimescaleDB с показаниями датчиков, партиционирование по времени';
+COMMENT ON COLUMN sensor_readings.time IS 'Момент измерения (partitioning-колонка hypertable), входит в PRIMARY KEY';
+COMMENT ON COLUMN sensor_readings.sensor_id IS 'Датчик, к которому относится показание';
+COMMENT ON COLUMN sensor_readings.value IS 'Измеренное значение в единице измерения датчика (sensors.unit)';
 
 SELECT create_hypertable('sensor_readings', 'time');
 CREATE INDEX idx_sensor_readings_time ON sensor_readings (sensor_id, time DESC);
+
+-- Retention: хранить сырые данные 90 дней (плейсхолдер, см. «Известные проблемы»)
+SELECT add_retention_policy('sensor_readings', INTERVAL '90 days');
+
+-- Continuous aggregate: часовые агрегаты для дашборда и долгих графиков
+CREATE MATERIALIZED VIEW sensor_readings_hourly
+WITH (timescaledb.continuous) AS
+SELECT
+    sensor_id,
+    time_bucket('1 hour', time) AS bucket,
+    avg(value) AS avg_value,
+    min(value) AS min_value,
+    max(value) AS max_value
+FROM sensor_readings
+GROUP BY sensor_id, bucket;
+
+SELECT add_continuous_aggregate_policy('sensor_readings_hourly',
+    start_offset => INTERVAL '3 days',
+    end_offset   => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 hour');
+
+-- 6. История срабатываний порогов алертинга
+CREATE TABLE alert_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sensor_id       UUID NOT NULL REFERENCES sensors(id) ON DELETE CASCADE,
+    threshold_type  VARCHAR(10) NOT NULL CHECK (threshold_type IN ('min', 'max')),
+    threshold_value DOUBLE PRECISION NOT NULL,
+    reading_value   DOUBLE PRECISION NOT NULL,
+    triggered_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at     TIMESTAMPTZ -- NULL, пока значение остаётся вне порога
+);
+
+CREATE INDEX idx_alert_events_sensor_triggered ON alert_events (sensor_id, triggered_at DESC);
+CREATE INDEX idx_alert_events_active ON alert_events (sensor_id) WHERE resolved_at IS NULL;
+
+COMMENT ON TABLE  alert_events IS 'История срабатываний порогов алертинга (sensors.min_threshold/max_threshold)';
+COMMENT ON COLUMN alert_events.id IS 'Первичный ключ';
+COMMENT ON COLUMN alert_events.sensor_id IS 'Датчик, чьё показание вышло за порог';
+COMMENT ON COLUMN alert_events.threshold_type IS 'Какой порог нарушен: min или max';
+COMMENT ON COLUMN alert_events.threshold_value IS 'Значение порога на момент срабатывания (снимок sensors.min_threshold/max_threshold, независим от последующих правок порога)';
+COMMENT ON COLUMN alert_events.reading_value IS 'Значение показания, вызвавшее срабатывание';
+COMMENT ON COLUMN alert_events.triggered_at IS 'Момент срабатывания алерта';
+COMMENT ON COLUMN alert_events.resolved_at IS 'Момент возврата значения в допустимый диапазон, NULL — алерт ещё активен';
 ```
