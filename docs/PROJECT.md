@@ -57,7 +57,7 @@
 | 2 | PostgreSQL + TimescaleDB | ✅ сделано, проверено вживую (2026-08-09) | `db` + `migrate` реально поднимаются, обе миграции применяются (`exit 0`), hypertable/continuous aggregate/роль `analytics_readonly` созданы. Потребовало починки миграций — см. «Миграции: найденные при первом живом запуске проблемы» ниже |
 | 3 | Fake Sensor | ✅ сделано | Публикует 3 метрики; `sensor/Dockerfile` собирается из локального `sensor/.env` (gitignored) — см. «Известные проблемы» про `.env-example` как шаблон |
 | 4 | .NET Consumer | ⬜ не начато | Директория `consumer/` создана (только `.gitkeep`), кода нет |
-| 5 | REST API | 🟡 инфраструктура + модуль `controllers` работают вживую | Каркас (config/pgxpool/router/CORS/graceful shutdown) и полный CRUD `controllers` проверены против реальной БД; заглушка `GET /health` снесена. Остальные модули (`sensors`, `readings`, `ws`, зона друга) не реализованы — см. [`docs/api-architecture.md`](api-architecture.md), раздел «Статус реализации» |
+| 5 | REST API | 🟡 инфраструктура + `controllers` + `sensors` работают вживую | Каркас (config/pgxpool/router/CORS/graceful shutdown) и полный CRUD `controllers`/`sensors` (с фильтром `?controller_id=`) проверены против реальной БД; заглушка `GET /health` снесена. Есть тесты: `make test` / `make test-integration`. Остальное (`readings`, `ws`, зона друга) не реализовано — см. [`docs/api-architecture.md`](api-architecture.md), разделы «Статус реализации» и «Тесты» |
 | 6 | Веб-дашборд | 🟡 каркас в main, не подключён | Стек — Vue 3 + Vite (не Nuxt, см. ниже); смёржен в `main`, но не подключён к реальному API |
 | 7 | Финал / интеграция | ⬜ не начато | End-to-end пайплайн (датчик → БД → API → дашборд) пока не собран |
 | 8 | LLM Analytics | 🟡 архитектура спроектирована, кода нет | `POST /analytics/query`, tool-calling цикл, read-only роль `analytics_readonly` — см. «LLM Analytics» ниже и [`docs/api-architecture.md`](api-architecture.md) |
@@ -423,10 +423,12 @@ WS-инфраструктуру, включая её как первый, кто
    migrate` с `condition: service_completed_successfully`; **не создавать** `controllers`/`sensors`
    автоматически на неизвестный `gateway_id`/`topic` — дропать и логировать (см. «Решение о
    провижининге устройств» выше)
-4. REST API на Go (chi + pgx + sqlc): ~~инфраструктура + модуль `controllers`~~ — сделано и
-   проверено вживую (2026-08-09). ~~Решить HTTP polling vs WebSocket~~ — решено, WS одним каналом
-   (см. `api-architecture.md`). **Дальше по зоне Кирилла:** `sensors` (с фильтром
-   `?controller_id=`), `readings`, затем `ws/` (хаб + listener + миграция `000003`). Зона друга
+4. REST API на Go (chi + pgx + sqlc): ~~инфраструктура + модули `controllers` и `sensors`~~ —
+   сделано и проверено вживую (2026-08-09), `sensors` написан через TDD и покрыт тестами.
+   ~~Решить HTTP polling vs WebSocket~~ — решено, WS одним каналом
+   (см. `api-architecture.md`). **Дальше по зоне Кирилла:** `readings`
+   (`GET /sensors/{id}/readings`, выбор raw/hourly по границе `from`), затем `ws/` (хаб +
+   listener + миграция `000003`). Зона друга
    (`auth`, `alerts`, `system_settings`) не начата — из-за этого RBAC на мутирующих ручках
    `controllers` пока отсутствует, стоит `TODO(auth)`. Ещё не сделано: `api/Dockerfile` и сервис
    `api` в `docker-compose.yml` с `depends_on: migrate`

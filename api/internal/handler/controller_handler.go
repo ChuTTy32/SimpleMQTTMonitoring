@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -38,21 +36,6 @@ type ControllerHandler struct {
 
 func NewControllerHandler(svc controllerService) *ControllerHandler {
 	return &ControllerHandler{svc: svc, validate: newValidator()}
-}
-
-// newValidator настраивает validator так, чтобы в ошибках фигурировали имена полей из
-// json-тегов (mqtt_gateway_id), а не имена Go-полей (MQTTGatewayID) — иначе фронт не
-// сопоставит ошибку с полем формы.
-func newValidator() *validator.Validate {
-	v := validator.New(validator.WithRequiredStructEnabled())
-	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
-		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
-		if name == "" || name == "-" {
-			return fld.Name
-		}
-		return name
-	})
-	return v
 }
 
 // Routes возвращает под-роутер модуля — router.go монтирует его под /controllers,

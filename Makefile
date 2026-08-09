@@ -8,7 +8,7 @@ DB_URL  := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@db:5432/$(POSTGRES_D
 
 .DEFAULT_GOAL := help
 .PHONY: help up up-build down down-v restart ps logs logs-one build \
-        migrate-up migrate-down migrate-version seed db-shell
+        migrate-up migrate-down migrate-version seed test test-integration db-shell
 
 help: ## Показать список команд
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -47,6 +47,13 @@ migrate-down: ## Откатить последнюю миграцию
 
 migrate-version: ## Показать текущую версию миграции
 	$(COMPOSE) run --rm migrate -path=/migrations -database "$(DB_URL)" version
+
+test: ## Юнит-тесты api/ (без БД, быстрые)
+	go -C api test ./...
+
+test-integration: ## Все тесты api/, включая интеграционные (нужна поднятая БД: make up)
+	TEST_DB_DSN="postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:5432/$(POSTGRES_DB)?sslmode=disable" \
+		go -C api test ./... -count=1
 
 seed: ## Залить тестовые данные (db/seed.sql) — контроллеры, датчики, настройки
 	$(COMPOSE) exec -T db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -v ON_ERROR_STOP=1 < db/seed.sql

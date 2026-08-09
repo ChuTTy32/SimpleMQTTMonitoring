@@ -47,8 +47,12 @@ func main() {
 	controllerRepo := repository.NewControllerRepository(pool)
 	controllerSvc := service.NewControllerService(controllerRepo)
 
+	sensorRepo := repository.NewSensorRepository(pool)
+	sensorSvc := service.NewSensorService(sensorRepo)
+
 	router := handler.NewRouter(cfg, handler.Deps{
 		Controllers: handler.NewControllerHandler(controllerSvc),
+		Sensors:     handler.NewSensorHandler(sensorSvc),
 	})
 
 	srv := &http.Server{

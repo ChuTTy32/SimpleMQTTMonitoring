@@ -14,6 +14,7 @@ import (
 // и ломать все места вызова.
 type Deps struct {
 	Controllers *ControllerHandler
+	Sensors     *SensorHandler
 }
 
 // NewRouter собирает chi.Router: глобальный middleware + монтирование модулей.
@@ -26,6 +27,7 @@ func NewRouter(cfg *config.Config, deps Deps) *chi.Mux {
 	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
 	r.Mount("/controllers", deps.Controllers.Routes())
+	r.Mount("/sensors", deps.Sensors.Routes())
 
 	return r
 }

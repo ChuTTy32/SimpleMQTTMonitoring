@@ -14,8 +14,13 @@ import (
 	"github.com/ChuTTy32/SimpleMQTTMonitoring/api/internal/repository/sqlc"
 )
 
-// pgUniqueViolation — код ошибки PostgreSQL при нарушении UNIQUE-ограничения.
-const pgUniqueViolation = "23505"
+// Коды ошибок PostgreSQL, которые имеют осмысленное отражение в API. Всё остальное —
+// баг или отказ инфраструктуры, наружу уходит как 500.
+const (
+	pgUniqueViolation     = "23505" // нарушен UNIQUE (controllers.mqtt_gateway_id, sensors.topic)
+	pgForeignKeyViolation = "23503" // ссылка на несуществующую строку (sensors.controller_id)
+	pgCheckViolation      = "23514" // нарушен CHECK (sensors.min_threshold < max_threshold)
+)
 
 // ControllerRepository — CRUD для controllers поверх сгенерированного sqlc-кода.
 type ControllerRepository struct {
@@ -131,8 +136,15 @@ func mapError(err error) error {
 	}
 
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
-		return model.ErrDuplicate
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case pgUniqueViolation:
+			return model.ErrDuplicate
+		case pgForeignKeyViolation:
+			return model.ErrReferenceNotFound
+		case pgCheckViolation:
+			return model.ErrConstraintViolation
+		}
 	}
 
 	return err

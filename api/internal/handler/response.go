@@ -77,6 +77,12 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		writeError(w, codeNotFound, "resource not found", nil)
 	case errors.Is(err, model.ErrDuplicate):
 		writeError(w, codeDuplicate, "resource already exists", nil)
+	// Ссылка в пустоту и нарушение CHECK — ошибки клиента, а не сервера: тело запроса
+	// синтаксически корректно, но противоречит состоянию/правилам БД. 400, не 500.
+	case errors.Is(err, model.ErrReferenceNotFound):
+		writeError(w, codeValidation, "referenced resource does not exist", nil)
+	case errors.Is(err, model.ErrConstraintViolation):
+		writeError(w, codeValidation, "value violates a database constraint", nil)
 	default:
 		slog.Error("unhandled service error", "error", err)
 		writeError(w, codeInternal, "internal server error", nil)
