@@ -1,0 +1,19 @@
+version: "2"
+sql:
+  - engine: postgresql
+    # Схема берётся из db/migrations в корне репозитория — api/ ею не владеет,
+    # см. docs/PROJECT.md, раздел «Миграции БД». Копировать схему сюда нельзя.
+    schema: ../db/migrations
+    queries: ./db/queries
+    gen:
+      go:
+        package: sqlc
+        out: internal/repository/sqlc
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        overrides:
+          # Без override sqlc отдаёт pgtype.UUID — обёртку драйвера, которая протекала бы
+          # из repository во все слои выше. google/uuid.UUID — обычный доменный тип.
+          # Все UUID-колонки в схеме NOT NULL, отдельный nullable-override не нужен.
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"

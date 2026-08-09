@@ -1,11 +1,9 @@
 REVOKE SELECT ON controllers, sensors, sensor_readings, sensor_readings_hourly FROM analytics_readonly;
 REVOKE USAGE ON SCHEMA public FROM analytics_readonly;
 
-DO $$
-BEGIN
-    EXECUTE format('REVOKE CONNECT ON DATABASE %I FROM analytics_readonly', current_database());
-END $$;
-
+-- Зеркально up-миграции: GRANT CONNECT там не выдавался (CONNECT есть у PUBLIC по
+-- умолчанию), поэтому и отзывать нечего. DO-блок убран — несовместим с
+-- x-multi-statement=true, см. комментарий в up-миграции.
 DROP ROLE IF EXISTS analytics_readonly;
 
 DROP MATERIALIZED VIEW IF EXISTS sensor_readings_hourly;

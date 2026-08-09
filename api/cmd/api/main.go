@@ -15,6 +15,8 @@ import (
 
 	"github.com/ChuTTy32/SimpleMQTTMonitoring/api/internal/config"
 	"github.com/ChuTTy32/SimpleMQTTMonitoring/api/internal/handler"
+	"github.com/ChuTTy32/SimpleMQTTMonitoring/api/internal/repository"
+	"github.com/ChuTTy32/SimpleMQTTMonitoring/api/internal/service"
 )
 
 func main() {
@@ -40,7 +42,14 @@ func main() {
 		log.Fatalf("pgxpool ping: %v", err)
 	}
 
-	router := handler.NewRouter(cfg)
+	// Сборка слоёв снизу вверх — вся проводка зависимостей видна в одном месте и нигде
+	// больше: ни один слой не создаёт свои зависимости сам.
+	controllerRepo := repository.NewControllerRepository(pool)
+	controllerSvc := service.NewControllerService(controllerRepo)
+
+	router := handler.NewRouter(cfg, handler.Deps{
+		Controllers: handler.NewControllerHandler(controllerSvc),
+	})
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

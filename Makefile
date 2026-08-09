@@ -2,11 +2,13 @@
 export
 
 COMPOSE := docker compose
-DB_URL  := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@db:5432/$(POSTGRES_DB)?sslmode=disable
+# x-multi-statement=true — см. пояснение у сервиса migrate в docker-compose.yml:
+# без него CREATE MATERIALIZED VIEW (continuous aggregate) падает в неявной транзакции.
+DB_URL  := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@db:5432/$(POSTGRES_DB)?sslmode=disable&x-multi-statement=true
 
 .DEFAULT_GOAL := help
 .PHONY: help up up-build down down-v restart ps logs logs-one build \
-        migrate-up migrate-down migrate-version db-shell
+        migrate-up migrate-down migrate-version seed db-shell
 
 help: ## Показать список команд
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -45,6 +47,9 @@ migrate-down: ## Откатить последнюю миграцию
 
 migrate-version: ## Показать текущую версию миграции
 	$(COMPOSE) run --rm migrate -path=/migrations -database "$(DB_URL)" version
+
+seed: ## Залить тестовые данные (db/seed.sql) — контроллеры, датчики, настройки
+	$(COMPOSE) exec -T db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -v ON_ERROR_STOP=1 < db/seed.sql
 
 db-shell: ## Зайти в psql внутри контейнера db
 	$(COMPOSE) exec db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)

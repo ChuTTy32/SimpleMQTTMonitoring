@@ -22,7 +22,10 @@ SELECT add_continuous_aggregate_policy('sensor_readings_hourly',
     end_offset   => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour');
 
-COMMENT ON MATERIALIZED VIEW sensor_readings_hourly IS 'Часовые агрегаты sensor_readings: используются дашбордом для длинных графиков и LLM Analytics для сводок без обращения к сырым данным';
+-- Именно ON VIEW, а не ON MATERIALIZED VIEW: continuous aggregate в TimescaleDB —
+-- это обычная view поверх внутренней материализованной гипертаблицы, в системном
+-- каталоге она числится как view (COMMENT ON MATERIALIZED VIEW на ней падает).
+COMMENT ON VIEW sensor_readings_hourly IS 'Часовые агрегаты sensor_readings: используются дашбордом для длинных графиков и LLM Analytics для сводок без обращения к сырым данным';
 COMMENT ON COLUMN sensor_readings_hourly.stddev_value IS 'Стандартное отклонение показаний за час — индикатор нестабильности датчика для LLM Analytics';
 COMMENT ON COLUMN sensor_readings_hourly.reading_count IS 'Количество показаний в часовом бакете';
 
@@ -30,18 +33,18 @@ COMMENT ON COLUMN sensor_readings_hourly.reading_count IS 'Количество 
 -- LLM-инструменты (get_sensor_summary и т.д.) обязаны физически не иметь возможности
 -- писать в БД, даже если весь SQL в коде — SELECT: это защита от бага в Go-коде, а не
 -- только от непредсказуемости LLM. Доступ дан точечно — только под существующие
--- инструменты; users (хеши паролей), alert_events и system_settings исключены осознанно,
+-- инструменты — users (хеши паролей), alert_events и system_settings исключены осознанно,
 -- расширять GRANT только вместе с новым tool'ом, не заранее.
 --
 -- Пароль — dev-значение по конвенции .env.example (см. POSTGRES_PASSWORD), не боевой
--- секрет; при деплое в прод — сменить через ALTER ROLE, миграция не должна нести реальный
+-- секрет. При деплое в прод — сменить через ALTER ROLE, миграция не должна нести реальный
 -- пароль.
 CREATE ROLE analytics_readonly WITH LOGIN PASSWORD 'analytics_readonly_local_dev';
 
-DO $$
-BEGIN
-    EXECUTE format('GRANT CONNECT ON DATABASE %I TO analytics_readonly', current_database());
-END $$;
-
+-- Отдельный GRANT CONNECT не нужен: Postgres по умолчанию выдаёт CONNECT роли PUBLIC,
+-- то есть всем. Раньше здесь был DO-блок с current_database() — он несовместим с
+-- x-multi-statement=true (см. docker-compose.yml), наивное разбиение по точке с запятой
+-- рвёт тело блока на куски. Если БД ужесточат через REVOKE CONNECT FROM PUBLIC —
+-- добавить сюда явный GRANT CONNECT с именем базы.
 GRANT USAGE ON SCHEMA public TO analytics_readonly;
 GRANT SELECT ON controllers, sensors, sensor_readings, sensor_readings_hourly TO analytics_readonly;

@@ -38,7 +38,7 @@ CREATE TABLE controllers (
 COMMENT ON TABLE  controllers IS 'Физическое или виртуальное устройство (шлюз/ПЛК/ESP32), объединяющее один или несколько датчиков';
 COMMENT ON COLUMN controllers.id IS 'Первичный ключ';
 COMMENT ON COLUMN controllers.name IS 'Человекочитаемое имя контроллера для дашборда, можно менять без влияния на приём MQTT-данных';
-COMMENT ON COLUMN controllers.mqtt_gateway_id IS 'gateway_id из MQTT-топика gateway/{gateway_id}/{metric}; по нему Consumer сопоставляет входящее сообщение с контроллером';
+COMMENT ON COLUMN controllers.mqtt_gateway_id IS 'gateway_id из MQTT-топика gateway/{gateway_id}/{metric} — по нему Consumer сопоставляет входящее сообщение с контроллером';
 COMMENT ON COLUMN controllers.ip_address IS 'IP-адрес устройства на площадке (справочно)';
 COMMENT ON COLUMN controllers.location IS 'Физическое расположение устройства (справочно)';
 COMMENT ON COLUMN controllers.is_active IS 'Флаг активности контроллера';
@@ -70,7 +70,7 @@ COMMENT ON COLUMN sensors.name IS 'Человекочитаемое имя да�
 COMMENT ON COLUMN sensors.topic IS 'Уникальный MQTT-топик, на который датчик публикует показания';
 COMMENT ON COLUMN sensors.metric_type IS 'Тип измеряемой величины (temperature/humidity/pressure и т.д.), однозначно задан топиком';
 COMMENT ON COLUMN sensors.unit IS 'Единица измерения (°C, Bar, % и т.д.)';
-COMMENT ON COLUMN sensors.min_threshold IS 'Нижний порог значения для алертинга, NULL — порог не задан; если оба порога заданы, min_threshold < max_threshold гарантировано CHECK';
+COMMENT ON COLUMN sensors.min_threshold IS 'Нижний порог значения для алертинга, NULL — порог не задан. Если оба порога заданы, min_threshold < max_threshold гарантировано CHECK';
 COMMENT ON COLUMN sensors.max_threshold IS 'Верхний порог значения для алертинга, NULL — порог не задан';
 COMMENT ON COLUMN sensors.is_active IS 'Флаг активности датчика';
 COMMENT ON COLUMN sensors.created_at IS 'Дата создания записи';

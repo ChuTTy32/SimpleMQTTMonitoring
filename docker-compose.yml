@@ -36,6 +36,14 @@ services:
   # Одноразовый прогон миграций из db/migrations/ — не часть api/ или consumer/, см.
   # docs/PROJECT.md, раздел «Миграции БД». Consumer и API, когда появятся в docker-compose,
   # должны объявить depends_on: migrate (condition: service_completed_successfully).
+  #
+  # x-multi-statement=true обязателен: TimescaleDB не разрешает
+  # CREATE MATERIALIZED VIEW ... WITH (timescaledb.continuous) внутри транзакции, а без
+  # этого флага golang-migrate шлёт весь файл одним simple query — Postgres оборачивает
+  # такой пакет в неявную транзакцию, и миграция падает. Флаг заставляет выполнять
+  # операторы по одному. Цена — миграция теряет атомарность (при ошибке в середине файла
+  # часть операторов останется применённой, версия будет помечена dirty), и в SQL нельзя
+  # использовать «;» внутри строковых литералов: разбиение наивное, по точке с запятой.
   migrate:
     image: migrate/migrate:v4.17.1
     container_name: mqtt_monitoring_migrate
@@ -46,7 +54,7 @@ services:
       - ./db/migrations:/migrations
     command:
       - "-path=/migrations"
-      - "-database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+      - "-database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable&x-multi-statement=true"
       - "up"
     restart: "no"
 

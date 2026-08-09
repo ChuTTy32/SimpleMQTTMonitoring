@@ -72,7 +72,7 @@ api/
 │       ├── users.sql
 │       ├── alert_events.sql
 │       └── sensor_readings.sql
-├── sqlc.yaml                    # schema: ../../db/migrations, queries: ./db/queries
+├── sqlc.yaml                    # schema: ../db/migrations, queries: ./db/queries
 ├── go.mod / go.sum
 ├── .gitignore
 └── Dockerfile                   # multi-stage: golang:1.23-alpine → distroless
@@ -402,6 +402,40 @@ LLM Analytics не добавляет тяжёлых зависимостей �
 инфраструктура, неизбежно достаётся тому, кто пишет первый модуль (Кирилл, т.к. `controllers`
 идёт первым по «Ближайшим шагам» в `docs/PROJECT.md`); друг подключает свои модули к уже
 поднятой инфре, не поднимает её заново.
+
+## Статус реализации
+
+**Реализовано и проверено вживую (2026-08-09):**
+
+- инфраструктурный каркас — `config.go`, `pgxpool` с fail-fast `Ping`, `router.go`,
+  `middleware/logging.go`, `middleware/cors.go`, graceful shutdown;
+- **модуль `controllers` целиком** — `model` → `repository` (sqlc) → `service` → `handler`,
+  все пять ручек (`GET` список с пагинацией, `GET` по id, `POST`, `PATCH`, `DELETE`),
+  формат ошибок и конверт `{items,total}` по контракту из этого документа.
+
+Проверено против реальной БД в Docker: пагинация и clamp, 409 на дубль `mqtt_gateway_id`,
+400 с заполненным `fields` на невалидном теле и неизвестном поле, 404 на чужой/несуществующий
+id, частичный `PATCH` (меняется только переданное поле), 204 на `DELETE` и 404 на повторный,
+CORS-allowlist (разрешённый origin получает заголовки, посторонний — нет).
+
+**Отклонение от плана:** RBAC на мутирующих ручках `controllers` не навешен — `auth`
+(и, соответственно, `middleware/auth.go` + `requirerole.go`) в зоне друга и ещё не написан.
+В `controller_handler.go` стоит `TODO(auth)` ровно там, куда встанет `RequireRole`.
+До появления auth мутирующие ручки открыты — это осознанный временный компромисс, а не
+недосмотр.
+
+**Не реализовано:** `sensors`, `readings`, `ws/`, `analytics`/`llm`, а также все модули
+зоны друга.
+
+## Тестовые данные
+
+`db/seed.sql` + `make seed` — контроллеры, датчики и системные настройки для разработки.
+Лежит в `db/`, но **не** в `db/migrations/`: это не миграция, в прод при `migrate up`
+попадать не должно. И не в `api/` — Consumer'у нужны те же строки (без зарегистрированных
+`controllers`/`sensors` он обязан дропать входящие MQTT-сообщения), поэтому seed — общая
+инфраструктура по тому же принципу, что и миграции. Данные согласованы с топиками реального
+симулятора (`gateway/esp32-01/{temperature,humidity,pressure}`), скрипт идемпотентен
+(`ON CONFLICT DO NOTHING`).
 
 ## Что не в этом документе
 

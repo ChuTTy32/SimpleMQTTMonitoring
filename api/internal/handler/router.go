@@ -9,16 +9,23 @@ import (
 	"github.com/ChuTTy32/SimpleMQTTMonitoring/api/internal/middleware"
 )
 
-// NewRouter собирает chi.Router с глобальным middleware. Маршруты модулей (controllers,
-// sensors, ...) монтируются сюда по мере реализации через r.Mount("/controllers", ...) —
-// сигнатура уже готова принять их зависимости, когда появится первый repository/service.
-func NewRouter(cfg *config.Config) *chi.Mux {
+// Deps — зависимости роутера. Структура, а не список аргументов: модулей будет много
+// (sensors, readings, auth, alerts...), и добавление каждого не должно менять сигнатуру
+// и ломать все места вызова.
+type Deps struct {
+	Controllers *ControllerHandler
+}
+
+// NewRouter собирает chi.Router: глобальный middleware + монтирование модулей.
+func NewRouter(cfg *config.Config, deps Deps) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.Logging)
 	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
+
+	r.Mount("/controllers", deps.Controllers.Routes())
 
 	return r
 }

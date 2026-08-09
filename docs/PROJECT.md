@@ -54,13 +54,38 @@
 |---|--------|--------|-------------|
 | 0 | Подготовка | ✅ сделано | Репозиторий, README, ветки |
 | 1 | Docker + Mosquitto | ✅ сделано | Брокер поднимается в Docker, топики рабочие |
-| 2 | PostgreSQL + TimescaleDB | 🟡 сервис в compose, не проверен реальным запуском | `db` (`timescale/timescaledb`) + `migrate` (`db/migrations/000001_init_schema.*`) добавлены в `docker-compose.yml`; `docker compose config` проходит без ошибок, но `docker compose up` живьём не проверялся — Docker недоступен в среде, где это писалось |
+| 2 | PostgreSQL + TimescaleDB | ✅ сделано, проверено вживую (2026-08-09) | `db` + `migrate` реально поднимаются, обе миграции применяются (`exit 0`), hypertable/continuous aggregate/роль `analytics_readonly` созданы. Потребовало починки миграций — см. «Миграции: найденные при первом живом запуске проблемы» ниже |
 | 3 | Fake Sensor | ✅ сделано | Публикует 3 метрики; `sensor/Dockerfile` собирается из локального `sensor/.env` (gitignored) — см. «Известные проблемы» про `.env-example` как шаблон |
 | 4 | .NET Consumer | ⬜ не начато | Директория `consumer/` создана (только `.gitkeep`), кода нет |
-| 5 | REST API | 🟡 первая ручка + структура спроектирована | `GET /health` работает; полная структура — [`docs/api-architecture.md`](api-architecture.md); остальные модули не реализованы |
+| 5 | REST API | 🟡 инфраструктура + модуль `controllers` работают вживую | Каркас (config/pgxpool/router/CORS/graceful shutdown) и полный CRUD `controllers` проверены против реальной БД; заглушка `GET /health` снесена. Остальные модули (`sensors`, `readings`, `ws`, зона друга) не реализованы — см. [`docs/api-architecture.md`](api-architecture.md), раздел «Статус реализации» |
 | 6 | Веб-дашборд | 🟡 каркас в main, не подключён | Стек — Vue 3 + Vite (не Nuxt, см. ниже); смёржен в `main`, но не подключён к реальному API |
 | 7 | Финал / интеграция | ⬜ не начато | End-to-end пайплайн (датчик → БД → API → дашборд) пока не собран |
 | 8 | LLM Analytics | 🟡 архитектура спроектирована, кода нет | `POST /analytics/query`, tool-calling цикл, read-only роль `analytics_readonly` — см. «LLM Analytics» ниже и [`docs/api-architecture.md`](api-architecture.md) |
+
+## Миграции: найденные при первом живом запуске проблемы (2026-08-09)
+
+Первый реальный `docker compose up db migrate` (до этого compose проверялся только
+статически через `docker compose config`) вскрыл три бага, из-за которых схема не
+разворачивалась вообще. Все исправлены, миграции проходят с `exit 0`:
+
+1. **`CREATE MATERIALIZED VIEW ... WITH DATA cannot run inside a transaction block.**
+   TimescaleDB запрещает создавать continuous aggregate внутри транзакции, а golang-migrate
+   без доп. флага отправляет весь файл одним simple query — Postgres оборачивает такой пакет
+   в неявную транзакцию. Решение: флаг **`x-multi-statement=true`** в строке подключения
+   (`docker-compose.yml` и `DB_URL` в `Makefile`) — операторы выполняются по одному.
+2. **`COMMENT ON MATERIALIZED VIEW` на continuous aggregate падает.** В TimescaleDB
+   continuous aggregate — это обычная view поверх внутренней материализованной гипертаблицы,
+   в системном каталоге числится как view. Исправлено на `COMMENT ON VIEW`.
+3. **Наивное разбиение по «;».** Плата за `x-multi-statement`: golang-migrate режет файл по
+   точке с запятой, не понимая ни строк, ни комментариев. Ломались `--` комментарии с «;»
+   в прозе, `COMMENT ON ... IS '...;...'` и `DO $$ ... $$` блок. Точки с запятой из прозы
+   убраны, DO-блок заменён (`GRANT CONNECT` не нужен — он есть у `PUBLIC` по умолчанию).
+
+Правила и симптомы вынесены в **[`db/migrations/README.md`](../db/migrations/README.md)** —
+читать перед написанием новой миграции. Главное: **никаких «;» кроме конца оператора**, и
+никаких PL/pgSQL-блоков. Второе следствие флага — миграции больше не атомарны: упавший
+на середине файл оставляет часть операторов применёнными и версию `dirty`, лечится
+`make down-v && make up` (для dev-базы приемлемо).
 
 ## Известные проблемы
 
@@ -307,13 +332,20 @@ SQL-запросов *для самого API*. Это не миграции, а
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env-example
-├── db/migrations/                       # независимая инфраструктура схемы БД, см. «Миграции БД»
-│   ├── 000001_init_schema.up.sql        # не часть api/ или consumer/
-│   ├── 000001_init_schema.down.sql
-│   ├── 000002_llm_analytics_readonly.up.sql   # stddev/count в sensor_readings_hourly + роль analytics_readonly
-│   └── 000002_llm_analytics_readonly.down.sql
+├── db/
+│   ├── seed.sql                         # тестовые данные для dev (`make seed`), НЕ миграция
+│   └── migrations/                      # независимая инфраструктура схемы БД, см. «Миграции БД»
+│       ├── README.md                    # ⚠️ правила написания миграций (никаких «;» в прозе)
+│       ├── 000001_init_schema.up.sql    # не часть api/ или consumer/
+│       ├── 000001_init_schema.down.sql
+│       ├── 000002_llm_analytics_readonly.up.sql   # stddev/count + роль analytics_readonly
+│       └── 000002_llm_analytics_readonly.down.sql
 ├── consumer/                            # только .gitkeep, кода нет
-├── api/                                 # только .gitkeep, кода нет
+├── api/                                 # Go REST API: каркас + модуль controllers (рабочий)
+│   ├── cmd/api/main.go                  # composition root
+│   ├── internal/{config,model,repository,service,handler,middleware}/
+│   ├── db/queries/                      # SQL-источник для sqlc
+│   └── sqlc.yaml
 ├── ui/                                  # Vue 3 + Vite дашборд, каркас
 └── docs/
     ├── PROJECT.md                       # этот файл
@@ -377,7 +409,13 @@ WS-инфраструктуру, включая её как первый, кто
 
 ## Ближайшие шаги (вытекают из статуса выше)
 
-1. Проверить `docker compose up --build` реальной сборкой (не проверено — Docker недоступен в среде, где это писалось), включая новые сервисы `db`/`migrate`, и поправить `sensor/.env-example` на реалистичный шаблон
+1. ~~Проверить `docker compose up` реальной сборкой, включая сервисы `db`/`migrate`~~ — сделано
+   (2026-08-09): `db` + `migrate` подняты живьём, миграции применяются, потребовалась починка
+   (см. «Миграции: найденные при первом живом запуске проблемы»). **Осталось:** `sensor/` живьём
+   так и не собирался — `sensor/Dockerfile` делает `COPY .env .env`, а `sensor/.env` отсутствует
+   (в `.gitignore`), поэтому `docker compose up` целиком сейчас падает на сборке `simulator`;
+   поднимать приходится точечно (`docker compose up -d db migrate`). Поправить `.env-example`
+   на реалистичный шаблон и завести локальный `sensor/.env`
 2. ~~Добавить сервис PostgreSQL+TimescaleDB в `docker-compose.yml`~~ — сделано (2026-08-08):
    `db` + `migrate` в compose, `db/migrations/000001_init_schema.up/down.sql`. Осталось только
    проверить живым запуском (см. п.1)
@@ -385,12 +423,13 @@ WS-инфраструктуру, включая её как первый, кто
    migrate` с `condition: service_completed_successfully`; **не создавать** `controllers`/`sensors`
    автоматически на неизвестный `gateway_id`/`topic` — дропать и логировать (см. «Решение о
    провижининге устройств» выше)
-4. Начать REST API на Go (chi + pgx + sqlc, см. раздел «REST API — `api/`» выше); `depends_on:
-   migrate` аналогично Consumer; заложить CRUD-эндпоинты для `controllers`/`sensors` (провижининг
-   устройств — обязателен, не только чтение `sensor_readings`) и управление
-   `alert_events.resolved_at`; ~~решить HTTP polling vs WebSocket~~ — решено, WS одним каналом (см.
-   `api-architecture.md`). Работа разделена между Кириллом и другом — см. «Команда» выше;
-   Кирилл начинает с инфраструктуры (`config.go`/`main.go`/`router.go`/`pgxpool`) + `controllers`
+4. REST API на Go (chi + pgx + sqlc): ~~инфраструктура + модуль `controllers`~~ — сделано и
+   проверено вживую (2026-08-09). ~~Решить HTTP polling vs WebSocket~~ — решено, WS одним каналом
+   (см. `api-architecture.md`). **Дальше по зоне Кирилла:** `sensors` (с фильтром
+   `?controller_id=`), `readings`, затем `ws/` (хаб + listener + миграция `000003`). Зона друга
+   (`auth`, `alerts`, `system_settings`) не начата — из-за этого RBAC на мутирующих ручках
+   `controllers` пока отсутствует, стоит `TODO(auth)`. Ещё не сделано: `api/Dockerfile` и сервис
+   `api` в `docker-compose.yml` с `depends_on: migrate`
 5. Подключить дашборд к реальным данным вместо заглушек
 6. Реализовать `internal/analytics`/`internal/llm` (см. «LLM Analytics» выше) — после того как
    базовый CRUD `api/` заработает; миграция `000002_llm_analytics_readonly.up.sql` уже применяется
