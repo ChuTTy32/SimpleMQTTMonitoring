@@ -1,253 +1,1333 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Codemap - SimpleMQTTMonitoring</title>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
-    :root {
-      --bg: #111111;
-      --panel-bg: #1a1a1a;
-      --text: #ededed;
-      --border: #333;
-      --accent: #d4af37;
-      --node-core: #2b2b2b;
-      --node-db: #1e3a5f;
-      --node-queue: #3d2c1d;
-      --node-ui: #1d3d31;
-    }
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      overflow: hidden;
-    }
-    header {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 50px;
-      background: var(--panel-bg);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      padding: 0 20px;
-      justify-content: space-between;
-      z-index: 10;
-    }
-    .meta { font-size: 0.85rem; color: #888; }
-    .meta strong { color: #ccc; }
-    #canvas { width: 100vw; height: 100vh; }
-    
-    /* Panel */
-    #info-panel {
-      position: absolute;
-      right: -400px; top: 50px; bottom: 0;
-      width: 350px;
-      background: var(--panel-bg);
-      border-left: 1px solid var(--border);
-      padding: 20px;
-      box-sizing: border-box;
-      transition: right 0.3s ease;
-      overflow-y: auto;
-      z-index: 5;
-    }
-    #info-panel.open { right: 0; }
-    .panel-toggle { cursor: pointer; color: var(--accent); font-weight: bold; }
-    
-    /* Nodes */
-    .node rect { stroke: #555; stroke-width: 1px; rx: 4; ry: 4; }
-    .node text { fill: var(--text); font-size: 12px; font-weight: 500; pointer-events: none; }
-    .node.dimmed { opacity: 0.2; }
-    .link { stroke: #555; stroke-opacity: 0.6; fill: none; stroke-width: 2px; }
-    .link.dimmed { stroke-opacity: 0.1; }
-    .link.highlight { stroke: var(--accent); stroke-opacity: 1; stroke-width: 3px; }
-    
-    .legend { position: absolute; bottom: 20px; left: 20px; background: var(--panel-bg); padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.8rem; }
-    .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
-    .legend-color { width: 12px; height: 12px; margin-right: 8px; border-radius: 2px; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SimpleMQTTMonitoring — Code Map</title>
+<style>
+  :root{
+    --bg:#0a0a0b;
+    --panel:#131315;
+    --panel-2:#18181b;
+    --border:#26262a;
+    --text:#e9e9ea;
+    --text-dim:#9b9ba3;
+    --text-faint:#5c5c64;
+    --accent:#c9a876;
+    --accent-soft:#c9a87633;
+    --accent-2:#6fcbb8;
+    --accent-2-soft:#6fcbb822;
+    --planned:#5c5c64;
+    --planned-soft:#5c5c6433;
+    --danger:#c96a6a;
+    --radius:10px;
+    --mono:"SF Mono",Consolas,"Cascadia Mono",monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#f5f4f1;
+    --panel:#ffffff;
+    --panel-2:#f0efec;
+    --border:#ddd9d1;
+    --text:#1b1b1d;
+    --text-dim:#5c5c64;
+    --text-faint:#8c8c94;
+    --accent:#a5763c;
+    --accent-soft:#a5763c22;
+    --accent-2:#238573;
+    --accent-2-soft:#23857322;
+    --planned:#b3b0a8;
+    --planned-soft:#b3b0a833;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;max-width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  #app{display:flex;flex-direction:column;height:100vh;min-width:0;}
+
+  header{
+    display:flex;align-items:center;gap:16px;padding:10px 18px;
+    border-bottom:1px solid var(--border);background:var(--panel);flex-wrap:wrap;
+  }
+  header h1{font-size:14px;font-weight:600;letter-spacing:.02em;margin:0;white-space:nowrap;}
+  header h1 span{color:var(--text-faint);font-weight:400;}
+  .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);font-family:var(--mono);}
+  .meta b{color:var(--text-dim);font-weight:600;}
+  .meta a{color:var(--accent);text-decoration:none;}
+  .meta a:hover{text-decoration:underline;}
+  .status-pill{
+    padding:2px 9px;border-radius:100px;border:1px solid var(--accent-soft);
+    background:var(--accent-soft);color:var(--accent);font-size:11px;font-family:var(--mono);
+  }
+  .dirty-pill{
+    padding:2px 9px;border-radius:100px;border:1px solid var(--danger);
+    background:#c96a6a22;color:var(--danger);font-size:11px;font-family:var(--mono);
+  }
+  .spacer{flex:1;}
+  .icon-btn{
+    background:transparent;border:1px solid var(--border);color:var(--text-dim);
+    border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;
+    display:flex;align-items:center;gap:6px;white-space:nowrap;
+  }
+  .icon-btn:hover{color:var(--text);border-color:var(--text-faint);}
+  .icon-btn.active{color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft);}
+
+  #about{
+    border-bottom:1px solid var(--border);background:var(--panel-2);
+    overflow:hidden;max-height:0;transition:max-height .25s ease;
+  }
+  #about.open{max-height:560px;}
+  #about .inner{padding:16px 22px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;font-size:12.5px;line-height:1.55;color:var(--text-dim);}
+  #about h3{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);}
+  #about p{margin:0;color:var(--text);}
+  #about .full-link{grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px;margin-top:2px;}
+  #about .full-link a{color:var(--accent);}
+
+  #main{flex:1;display:flex;min-height:0;min-width:0;position:relative;overflow:hidden;}
+
+  #sidebar{
+    width:280px;flex-shrink:0;border-right:1px solid var(--border);background:var(--panel);
+    display:flex;flex-direction:column;transition:margin-left .2s ease;
+    overflow-y:auto;overflow-x:hidden;
+  }
+  #sidebar.collapsed{margin-left:-280px;}
+  .sb-section{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .sb-section h4{margin:0 0 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);}
+  #search{
+    width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:7px 10px;font-size:12.5px;font-family:inherit;
+  }
+  #search:focus{outline:none;border-color:var(--accent);}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+  .legend-badge{
+    width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-size:9.5px;font-family:var(--mono);font-weight:700;border:1px solid var(--border);flex-shrink:0;
+  }
+  .toggle-row{display:flex;gap:6px;}
+  .toggle-row .icon-btn{flex:1;justify-content:center;}
+  #node-list, #flow-list{max-height:220px;overflow-y:auto;}
+  .list-item{
+    padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12px;color:var(--text-dim);
+    display:flex;justify-content:space-between;align-items:center;gap:6px;
+  }
+  .list-item:hover{background:var(--panel-2);color:var(--text);}
+  .list-item.selected{background:var(--accent-soft);color:var(--accent);}
+  .list-item .tag{font-size:9.5px;font-family:var(--mono);color:var(--text-faint);}
+  .dim-hidden{display:none !important;}
+  .shortcuts{font-size:11px;color:var(--text-faint);line-height:1.9;font-family:var(--mono);}
+  .shortcuts kbd{background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;color:var(--text-dim);}
+
+  #canvas-wrap{flex:1;min-width:0;position:relative;overflow:hidden;background:
+    radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/28px 28px;}
+  svg#graph{width:100%;height:100%;cursor:grab;}
+  svg#graph.grabbing{cursor:grabbing;}
+
+  .node-rect{fill:var(--panel);stroke:var(--border);stroke-width:1.3;rx:10;transition:opacity .15s, stroke .15s;}
+  .node-rect.planned{stroke-dasharray:4 3;}
+  .node-rect.partial{stroke-dasharray:1 3;}
+  .node-group{cursor:pointer;}
+  .node-group.dimmed{opacity:.18;}
+  .node-group.selected .node-rect{stroke:var(--accent);stroke-width:2;}
+  .node-group.in-path .node-rect{stroke:var(--accent-2);stroke-width:2;}
+  .node-title{fill:var(--text);font-size:12.5px;font-weight:600;font-family:inherit;}
+  .node-sub{fill:var(--text-faint);font-size:10px;font-family:var(--mono);}
+  .node-badge-bg{fill:var(--panel-2);stroke:var(--border);}
+  .node-badge-text{fill:var(--text-dim);font-size:9.5px;font-weight:700;font-family:var(--mono);}
+  /* r как CSS-geometry-property для <circle> не поддерживается в Safari < 16 — реальный радиус
+     задаётся явным SVG-атрибутом в JS (renderNodes), это правило только для явных браузеров,
+     которые уже умеют CSS-геометрию, и не является единственным источником размера. */
+  .status-dot{r:3.5;}
+  .status-dot.implemented{fill:var(--accent-2);}
+  .status-dot.partial{fill:var(--accent);}
+  .status-dot.planned{fill:var(--planned);}
+  .arrow-fill{fill:var(--text-faint);}
+
+  .edge-path{fill:none;stroke:var(--text-faint);stroke-width:1.4;marker-end:url(#arrow);transition:opacity .15s,stroke .15s;}
+  .edge-path.planned{stroke-dasharray:3 3;opacity:.55;}
+  .edge-path.dimmed{opacity:.08;}
+  .edge-path.in-path{stroke:var(--accent-2);stroke-width:2.2;opacity:1;}
+  .edge-label{fill:var(--text-faint);font-size:9px;font-family:var(--mono);}
+  .edge-label.dimmed{opacity:.1;}
+
+  #minimap{
+    position:absolute;right:14px;bottom:14px;width:150px;height:110px;background:var(--panel);
+    border:1px solid var(--border);border-radius:8px;overflow:hidden;opacity:.9;
+  }
+  #minimap svg{width:100%;height:100%;}
+  #minimap-viewport{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2;}
+
+  #zoom-controls, #db-zoom-controls{position:absolute;left:14px;bottom:14px;display:flex;flex-direction:column;gap:4px;}
+  #zoom-controls button, #db-zoom-controls button{
+    width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--panel);
+    color:var(--text-dim);cursor:pointer;font-size:14px;
+  }
+  #zoom-controls button:hover, #db-zoom-controls button:hover{color:var(--text);}
+
+  #detail, #db-detail{
+    position:absolute;top:0;right:-380px;width:360px;height:100%;background:var(--panel);
+    border-left:1px solid var(--border);transition:right .2s ease;overflow-y:auto;padding:18px;
+    font-size:12.5px;line-height:1.6;
+  }
+  #detail.open, #db-detail.open{right:0;}
+  #detail h2, #db-detail h2{margin:0 0 4px;font-size:15px;}
+  #detail .role, #db-detail .role{color:var(--text-dim);margin-bottom:14px;}
+  #detail h4, #db-detail h4{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:16px 0 6px;}
+  #detail ul, #db-detail ul{margin:0;padding-left:16px;color:var(--text-dim);}
+  #detail li, #db-detail li{margin-bottom:4px;}
+  #detail a.src-link, #db-detail a.src-link{
+    display:inline-block;margin-top:4px;color:var(--accent);text-decoration:none;font-family:var(--mono);font-size:11.5px;
+    word-break:break-all;
+  }
+  #detail a.src-link:hover, #db-detail a.src-link:hover{text-decoration:underline;}
+  #detail .close-btn, #db-detail .close-btn{float:right;background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;}
+  #detail .status-tag, #db-detail .col-table{
+    display:inline-block;padding:2px 8px;border-radius:100px;font-size:10.5px;font-family:var(--mono);margin-bottom:10px;
+  }
+  #detail .status-tag.implemented{background:var(--accent-2-soft);color:var(--accent-2);}
+  #detail .status-tag.partial{background:var(--accent-soft);color:var(--accent);}
+  #detail .status-tag.planned{background:var(--planned-soft);color:var(--text-dim);}
+  #detail .flow-steps{display:flex;flex-direction:column;gap:4px;}
+  #detail .flow-step{padding:6px 9px;background:var(--panel-2);border-radius:7px;font-size:11.5px;font-family:var(--mono);color:var(--text-dim);}
+  #db-detail .col-table{background:var(--accent-2-soft);color:var(--accent-2);}
+  #db-detail .col-row{padding:5px 9px;background:var(--panel-2);border-radius:7px;font-size:11px;font-family:var(--mono);color:var(--text-dim);display:flex;justify-content:space-between;gap:8px;}
+  #db-detail .col-row + .col-row{margin-top:4px;}
+  #db-detail .col-row b{color:var(--text);font-weight:600;}
+  #db-detail .col-row .flag-pk{color:var(--accent);}
+  #db-detail .col-row .flag-fk{color:var(--accent-2);}
+
+  #delta-banner{
+    position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--border);border-radius:100px;padding:6px 16px;font-size:11.5px;color:var(--text-dim);
+    display:none;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:80%;text-align:center;
+  }
+  #delta-banner.show{display:block;}
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+
+  #toast{
+    position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel);
+    border:1px solid var(--border);padding:7px 14px;border-radius:8px;font-size:12px;color:var(--text-dim);
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+  }
+  #toast.show{opacity:1;}
+
+  /* ── Схема БД (оверлей поверх #app, но внутри него — чтобы fullscreen на #app её не терял) ── */
+  #db-overlay{
+    position:fixed;inset:0;z-index:100;background:var(--bg);display:none;flex-direction:column;
+  }
+  #db-overlay.open{display:flex;}
+  #db-overlay .db-header{
+    display:flex;align-items:center;gap:14px;padding:10px 18px;flex-wrap:wrap;
+    border-bottom:1px solid var(--border);background:var(--panel);
+  }
+  #db-overlay .db-header h2{margin:0;font-size:14px;font-weight:600;white-space:nowrap;}
+  .db-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-dim);align-items:center;}
+  .db-legend b{font-family:var(--mono);}
+  .db-legend b.pk{color:var(--accent);}
+  .db-legend b.fk{color:var(--accent-2);}
+
+  #db-canvas-wrap{
+    flex:1;min-width:0;position:relative;overflow:hidden;background:
+    radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/28px 28px;
+  }
+  svg#db-graph{width:100%;height:100%;cursor:grab;}
+  svg#db-graph.grabbing{cursor:grabbing;}
+
+  .table-rect{fill:var(--panel);stroke:var(--border);stroke-width:1.3;rx:10;transition:opacity .15s,stroke .15s;}
+  .table-group{cursor:pointer;}
+  .table-group.dimmed{opacity:.18;}
+  .table-group.selected .table-rect{stroke:var(--accent);stroke-width:2;}
+  .table-group.in-path .table-rect{stroke:var(--accent-2);stroke-width:2;}
+  .table-header-bg{fill:var(--panel-2);}
+  .table-title{fill:var(--text);font-size:12.5px;font-weight:700;font-family:inherit;}
+  .table-sub{fill:var(--text-faint);font-size:9px;font-family:var(--mono);}
+  .col-name{fill:var(--text);font-size:10.5px;font-family:var(--mono);}
+  .col-type{fill:var(--text-faint);font-size:9px;font-family:var(--mono);}
+  .col-flag-pk{fill:var(--accent);font-size:9.5px;font-weight:700;font-family:var(--mono);}
+  .col-flag-fk{fill:var(--accent-2);font-size:9.5px;font-weight:700;font-family:var(--mono);}
+
+  .fk-edge{fill:none;stroke:var(--accent-2);stroke-width:1.4;marker-end:url(#arrow);transition:opacity .15s;}
+  .fk-edge.dimmed{opacity:.1;}
+  .fk-edge.in-path{stroke-width:2.4;}
+  .fk-edge-label{fill:var(--accent-2);font-size:9px;font-family:var(--mono);}
+  .fk-edge-label.dimmed{opacity:.1;}
+</style>
 </head>
 <body>
+<div id="app">
   <header>
-    <div>
-      <strong>SimpleMQTTMonitoring</strong> Codemap
-      <span class="meta" style="margin-left:20px;">
-        Status: <strong>Development</strong> | Version: <strong>0.1.0</strong> |
-        <a href="https://github.com/org/repo" style="color:var(--accent); text-decoration:none;">GitHub</a>
-      </span>
+    <h1>SimpleMQTTMonitoring <span>/ Industrial Sensor Monitor — Code Map</span></h1>
+    <div class="meta">
+      <span><b>commit</b> <a id="meta-commit" href="#" target="_blank" rel="noopener"></a></span>
+      <span><b>version</b> 0.1.0</span>
+      <span><b>generated</b> <span id="meta-time"></span></span>
+      <a id="meta-repo" href="#" target="_blank" rel="noopener">GitHub →</a>
     </div>
-    <div class="panel-toggle" onclick="document.getElementById('info-panel').classList.toggle('open')">ℹ About Project</div>
+    <span class="status-pill">development</span>
+    <span class="dirty-pill" id="dirty-pill" title="Рабочее дерево содержит незакоммиченные изменения на момент генерации">⚠ uncommitted changes</span>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="btn-about">ⓘ О проекте</button>
+    <button class="icon-btn" id="btn-dbschema">🗄 Схема БД (D)</button>
+    <button class="icon-btn" id="btn-sidebar">☰ Панель</button>
+    <button class="icon-btn" id="btn-theme">☾ Тема</button>
+    <button class="icon-btn" id="btn-fullscreen">⤢ Fullscreen (F)</button>
   </header>
 
-  <svg id="canvas"></svg>
-
-  <div id="info-panel">
-    <h3>Project Summary</h3>
-    <p style="font-size: 0.9rem; line-height: 1.4; color: #bbb;">
-      Учебно-боевой IIoT pet-проект: путь от симулированного промышленного датчика до веб-дашборда. 
-      Цель — освоить стек (MQTT → Docker → TimescaleDB → .NET → Go → Vue) и заложить фундамент для научной публикации.
-    </p>
-    <h4>Tech Stack</h4>
-    <ul style="font-size: 0.85rem; color: #aaa; padding-left: 15px;">
-      <li><strong>Sensor:</strong> Python, paho-mqtt</li>
-      <li><strong>Broker:</strong> Mosquitto 2.x</li>
-      <li><strong>DB:</strong> PostgreSQL + TimescaleDB</li>
-      <li><strong>Consumer:</strong> .NET 8 Worker</li>
-      <li><strong>API:</strong> Go 1.23, chi, pgx</li>
-      <li><strong>UI:</strong> Vue 3, Vite, Tailwind</li>
-    </ul>
-    <div style="margin-top: 20px; font-size: 0.85rem;">
-      <a href="../PROJECT.md" style="color:var(--accent);">Full details: docs/PROJECT.md</a>
-    </div>
-    
-    <div id="node-details" style="margin-top: 30px; display: none; border-top: 1px solid #333; padding-top: 15px;">
-      <h4 id="nd-title" style="margin: 0 0 10px 0;"></h4>
-      <p id="nd-role" style="font-size: 0.85rem; color: #ccc;"></p>
-      <p id="nd-path" style="font-size: 0.8rem; color: #888; font-family: monospace;"></p>
+  <div id="about">
+    <div class="inner">
+      <div>
+        <h3>Задача</h3>
+        <p>Мониторинг промышленного датчика в реальном времени: симулированный датчик → MQTT →
+        TimescaleDB → REST API → веб-дашборд. Учебно-боевой IIoT pet-проект, фундамент для
+        магистратуры и Scopus-публикации.</p>
+      </div>
+      <div>
+        <h3>Команда</h3>
+        <p>Кирилл — технический лид, архитектура, фронтенд.<br>Друг — бэкенд (.NET/Consumer,
+        PostgreSQL, инфраструктура); Go на REST API оба изучают вместе.</p>
+      </div>
+      <div>
+        <h3>Стек</h3>
+        <p>Python (симулятор) · Mosquitto 2.x · Go — chi + pgx + sqlc + JWT (REST API, первая
+        ручка сделана) · .NET 8 Worker (Consumer, план) · PostgreSQL + TimescaleDB (развёрнута в
+        docker-compose) · Vue 3 + Vite (дашборд, каркас) · LLM (провайдер не зафиксирован —
+        спрятан за internal/llm.Client, план) · Docker Compose + Makefile.</p>
+      </div>
+      <div>
+        <h3>Статус</h3>
+        <p>Реализовано: MQTT-брокер + симулятор; TimescaleDB + миграции в docker-compose
+        (config валиден, живой запуск не проверялся); REST API — GET /health (проверено вживую).
+        Спроектировано, не реализовано: полная структура API (CRUD + WebSocket-канал метрик,
+        LLM Analytics — tool-calling POST /analytics/query, см. docs/api-architecture.md),
+        Consumer, подключение дашборда. Read-only роль analytics_readonly и агрегаты
+        stddev/count под LLM Analytics — в миграции db/migrations/000002, уже применяется
+        сервисом migrate.</p>
+      </div>
+      <div class="full-link">
+        Источник этой информации и полный актуальный контекст проекта:
+        <a href="../PROJECT.md" target="_blank">docs/PROJECT.md</a>
+      </div>
     </div>
   </div>
 
-  <div class="legend">
-    <div class="legend-item"><div class="legend-color" style="background:var(--node-core)"></div>Core / API</div>
-    <div class="legend-item"><div class="legend-color" style="background:var(--node-queue)"></div>Broker / Queue</div>
-    <div class="legend-item"><div class="legend-color" style="background:var(--node-db)"></div>Database</div>
-    <div class="legend-item"><div class="legend-color" style="background:var(--node-ui)"></div>UI / Client</div>
+  <div id="main">
+    <aside id="sidebar">
+      <div class="sb-section">
+        <input id="search" type="text" placeholder="Поиск узлов… ( / )" />
+      </div>
+      <div class="sb-section">
+        <h4>Легенда</h4>
+        <div class="legend-row"><span class="legend-badge">C</span> Orchestration</div>
+        <div class="legend-row"><span class="legend-badge">S</span> Service</div>
+        <div class="legend-row"><span class="legend-badge">B</span> Broker</div>
+        <div class="legend-row"><span class="legend-badge">D</span> Database</div>
+        <div class="legend-row"><span class="legend-badge">M</span> Migrations</div>
+        <div class="legend-row"><span class="legend-badge">F</span> Frontend</div>
+        <div class="legend-row"><span class="legend-badge">E</span> External</div>
+        <div class="legend-row"><svg width="12" height="12"><circle class="status-dot implemented" cx="6" cy="6" r="3.5"></circle></svg> реализовано</div>
+        <div class="legend-row"><svg width="12" height="12"><circle class="status-dot partial" cx="6" cy="6" r="3.5"></circle></svg> частично</div>
+        <div class="legend-row"><svg width="12" height="12"><circle class="status-dot planned" cx="6" cy="6" r="3.5"></circle></svg> запланировано</div>
+      </div>
+      <div class="sb-section">
+        <h4>Детализация</h4>
+        <div class="toggle-row">
+          <button class="icon-btn active" id="lod-high">High-Level</button>
+          <button class="icon-btn" id="lod-low">Low-Level</button>
+        </div>
+      </div>
+      <div class="sb-section">
+        <h4>Drift vs codemap.lock</h4>
+        <button class="icon-btn" id="btn-delta" style="width:100%;justify-content:center;">Показать изменения</button>
+      </div>
+      <div class="sb-section">
+        <h4>Узлы</h4>
+        <div id="node-list"></div>
+      </div>
+      <div class="sb-section">
+        <h4>Потоки (1–5 клавиши)</h4>
+        <div id="flow-list"></div>
+      </div>
+      <div class="sb-section">
+        <h4>Экспорт</h4>
+        <div class="toggle-row">
+          <button class="icon-btn" id="export-svg">SVG</button>
+          <button class="icon-btn" id="export-png">PNG</button>
+          <button class="icon-btn" id="export-mmd">Mermaid</button>
+        </div>
+      </div>
+      <div class="sb-section">
+        <h4>Клавиши</h4>
+        <div class="shortcuts">
+          <div><kbd>/</kbd> поиск</div>
+          <div><kbd>Esc</kbd> сбросить выделение</div>
+          <div><kbd>F</kbd> fullscreen</div>
+          <div><kbd>1</kbd>–<kbd>5</kbd> потоки</div>
+          <div><kbd>R</kbd> сброс масштаба</div>
+          <div><kbd>D</kbd> схема БД</div>
+        </div>
+      </div>
+    </aside>
+
+    <div id="canvas-wrap">
+      <svg id="graph">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="arrow-fill"></path>
+          </marker>
+        </defs>
+        <g id="viewport">
+          <g id="edges-layer"></g>
+          <g id="nodes-layer"></g>
+        </g>
+      </svg>
+      <div id="delta-banner"></div>
+      <div id="zoom-controls">
+        <button id="zoom-in">+</button>
+        <button id="zoom-out">–</button>
+        <button id="zoom-reset" title="Reset (R)">⤾</button>
+      </div>
+      <div id="minimap"><svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet">
+        <g id="minimap-nodes"></g>
+        <rect id="minimap-viewport" x="0" y="0" width="100" height="100"></rect>
+      </svg></div>
+      <div id="toast"></div>
+    </div>
+
+    <div id="detail">
+      <button class="close-btn" id="detail-close">✕</button>
+      <div id="detail-body"></div>
+    </div>
   </div>
 
-  <script>
-    // Embedded JSON data for fully self-contained HTML
-    const graphData = {
-      "nodes": [
-        { "id": "sensor", "path": "sensor/simulator.py", "role": "Генератор синтетических данных температуры, влажности, давления.", "group": "core" },
-        { "id": "mosquitto", "path": "mosquitto/config/mosquitto.conf", "role": "MQTT Брокер для обмена сообщениями.", "group": "queue" },
-        { "id": "db", "path": "docker-compose.yml", "role": "PostgreSQL + TimescaleDB для хранения временных рядов (sensor_readings) и конфигураций.", "group": "db" },
-        { "id": "db_migrations", "path": "db/migrations/", "role": "Независимая инфраструктура миграций (golang-migrate).", "group": "db" },
-        { "id": "consumer", "path": "consumer/", "role": ".NET Worker Service для чтения MQTT и записи в БД.", "group": "core" },
-        { "id": "api_core", "path": "api/cmd/api/main.go", "role": "REST API на Go (CRUD контроллеров/датчиков, выдача метрик).", "group": "core" },
-        { "id": "api_ws", "path": "api/internal/ws/", "role": "WebSocket сервер для realtime данных.", "group": "core" },
-        { "id": "api_analytics", "path": "api/internal/analytics/", "role": "Модуль LLM аналитики (tool-calling цикл).", "group": "core" },
-        { "id": "ui", "path": "ui/src/main.ts", "role": "Веб-дашборд на Vue 3 + Vite.", "group": "ui" }
-      ],
-      "edges": [
-        { "source": "sensor", "target": "mosquitto", "type": "publishes" },
-        { "source": "consumer", "target": "mosquitto", "type": "subscribes" },
-        { "source": "consumer", "target": "db", "type": "writes" },
-        { "source": "db_migrations", "target": "db", "type": "writes" },
-        { "source": "api_core", "target": "db", "type": "reads_writes" },
-        { "source": "db", "target": "api_ws", "type": "calls" },
-        { "source": "api_analytics", "target": "db", "type": "reads" },
-        { "source": "ui", "target": "api_core", "type": "calls" },
-        { "source": "ui", "target": "api_ws", "type": "subscribes" }
-      ]
-    };
+  <div id="db-overlay">
+    <div class="db-header">
+      <h2>🗄 Схема БД — PostgreSQL + TimescaleDB</h2>
+      <div class="db-legend">
+        <span><b class="pk">PK</b> первичный ключ</span>
+        <span><b class="fk">FK</b> внешний ключ</span>
+        <span><b>UQ</b> уникальность</span>
+        <span><b>NN</b> NOT NULL</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="btn-dbschema-close">✕ Закрыть (Esc)</button>
+    </div>
+    <div id="db-canvas-wrap">
+      <svg id="db-graph">
+        <g id="db-viewport">
+          <g id="db-edges-layer"></g>
+          <g id="db-nodes-layer"></g>
+        </g>
+      </svg>
+      <div id="db-zoom-controls">
+        <button id="db-zoom-in">+</button>
+        <button id="db-zoom-out">–</button>
+        <button id="db-zoom-reset" title="Reset (R)">⤾</button>
+      </div>
+    </div>
+    <div id="db-detail">
+      <button class="close-btn" id="db-detail-close">✕</button>
+      <div id="db-detail-body"></div>
+    </div>
+  </div>
+</div>
 
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+<script>
+const COMMIT = "a35d3b2d719dc08a826e9e2171168305ae68b8cc";
+const REPO = "ChuTTy32/SimpleMQTTMonitoring";
+const GH = "https://github.com/" + REPO;
+const GENERATED_AT = "2026-08-09T15:30:00Z";
+const WORKING_TREE_DIRTY = false;
 
-    const svg = d3.select("#canvas")
-      .call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)))
-      .append("g");
-      
-    const g = svg.append("g");
+function ghLink(path, line){
+  if(!path) return null;
+  const kind = path.endsWith("/") ? "tree" : "blob";
+  const cleanPath = path.replace(/\/$/, "");
+  let url = GH + "/" + kind + "/" + COMMIT + "/" + cleanPath;
+  if(line) url += "#L" + line;
+  return url;
+}
 
-    // Defs for arrowheads
-    svg.append("defs").selectAll("marker")
-      .data(["end"])
-      .join("marker")
-        .attr("id", String)
-        .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 25)
-        .attr("refY", 0)
-        .attr("markerWidth", 6)
-        .attr("markerHeight", 6)
-        .attr("orient", "auto")
-      .append("path")
-        .attr("fill", "#555")
-        .attr("d", "M0,-5L10,0L0,5");
+const DATA = {
+  nodes: [
+    {id:"docker-compose", type:"orchestration", layer:0, status:"implemented",
+     path:"docker-compose.yml", role:"Orchestration — определяет и запускает локальный стек; обёрнут в Makefile для повседневных команд",
+     entrypoints:["docker-compose.yml", "Makefile:14 (up)"], tests:[],
+     constraints:["5 сервисов: mqtt-broker, simulator, db, migrate (сервисов для consumer/API/дашборда всё ещё нет)",
+       "Makefile — обёртка (up/down/ps/logs/migrate-*/db-shell), не самостоятельный слой",
+       "docker compose config проходит без ошибок; реальный docker compose up не проверялся (Docker недоступен в среде разработки)"],
+     evidence:"docker-compose.yml:1-54; Makefile:1-53"},
+    {id:"fake-sensor", type:"service", layer:1, status:"implemented",
+     path:"sensor/", role:"Симулированный IIoT-шлюз — публикует показания по MQTT",
+     entrypoints:["sensor/simulator.py:97 (main)"], tests:[],
+     constraints:["Конфиг через .env: MQTT_BROKER, MQTT_BROKER_PORT, GATEWAY_ID, PUBLISH_INTERVAL_SEC",
+       "3 метрики за тик: temperature, humidity, pressure (simulator.py:77-87)",
+       "sensor/Dockerfile берёт sensor/.env через COPY .env .env (gitignored, создать вручную); реальная сборка не проверялась (Docker недоступен в среде проверки)",
+       "sensor/.env-example — по-прежнему placeholder-значения (MQTT_BROKER_PORT=99999 — невалидный порт), Dockerfile его не использует"],
+     evidence:"sensor/simulator.py; sensor/Dockerfile"},
+    {id:"mqtt-broker", type:"broker", layer:2, status:"implemented",
+     path:"mosquitto/config/mosquitto.conf", role:"MQTT-брокер (Mosquitto 2.x) — шина между датчиком и бэкендом",
+     entrypoints:["mosquitto/config/mosquitto.conf"], tests:[],
+     constraints:["listener 1883","allow_anonymous true — без аутентификации, только для разработки"],
+     evidence:"mosquitto/config/mosquitto.conf:1-3"},
+    {id:"dotnet-consumer", type:"service", layer:3, status:"planned",
+     path:"consumer/", role:"Планируемый сервис — .NET Worker, подписка на MQTT, запись в sensor_readings",
+     entrypoints:[], tests:[],
+     constraints:["Директория создана (только consumer/.gitkeep), исходников нет",
+       "Планируемый стек: .NET 8 Worker Service, MQTTnet, Npgsql/Dapper",
+       "На неизвестный gateway_id/topic — не создаёт controllers/sensors, дропает сообщение и логирует (решение по провижинингу от 2026-08-08)"],
+     evidence:"consumer/.gitkeep; docs/PROJECT.md"},
+    {id:"db-migrations", type:"migration", layer:3, status:"implemented",
+     path:"db/migrations/", role:"Независимая инфраструктура схемы БД — версионированные миграции, осознанно НЕ часть api/ или consumer/",
+     entrypoints:["db/migrations/000001_init_schema.up.sql", "db/migrations/000001_init_schema.down.sql",
+       "db/migrations/000002_llm_analytics_readonly.up.sql", "db/migrations/000002_llm_analytics_readonly.down.sql"], tests:[],
+     constraints:["Решение зафиксировано 2026-08-08: миграции внутри api/ создавали бы скрытую зависимость Consumer от деплоя API",
+       "Конвенция golang-migrate: {версия}_{название}.up/down.sql",
+       "Применяется одноразовым сервисом migrate с depends_on: db: condition: service_healthy",
+       "Consumer и API, когда появятся в docker-compose, должны объявить depends_on: migrate: condition: service_completed_successfully",
+       "000002 (2026-08-09): пересоздаёт sensor_readings_hourly с stddev_value/reading_count (ALTER для continuous aggregate недоступен) + read-only роль analytics_readonly под LLM Analytics",
+       "Будущая NOTIFY-триггер миграция для WS (см. узел rest-api) сдвинута с 000002 на 000003 — номер занят LLM Analytics"],
+     evidence:"db/migrations/000001_init_schema.up.sql:1-150; db/migrations/000002_llm_analytics_readonly.up.sql:1-47"},
+    {id:"timescaledb", type:"database", layer:4, status:"implemented",
+     path:"docker-compose.yml (сервис db)", role:"PostgreSQL + TimescaleDB — 6 таблиц, sensor_readings как hypertable",
+     entrypoints:["docker-compose.yml:18-34"], tests:[],
+     constraints:["Схема (2026-08-08): users, controllers, sensors, system_settings, sensor_readings, alert_events — metrics убрана (структурный баг)",
+       "sensors.controller_id NOT NULL + индекс; CHECK на роли и на min_threshold < max_threshold; PRIMARY KEY(sensor_id, time) от дублей",
+       "Retention policy (90 дней, плейсхолдер) + continuous aggregate (часовые агрегаты)",
+       "controllers.mqtt_gateway_id — сопоставление с gateway_id из MQTT-топика",
+       "000002 (2026-08-09): sensor_readings_hourly дополнен stddev_value/reading_count; добавлена read-only роль analytics_readonly с GRANT SELECT только на controllers/sensors/sensor_readings/sensor_readings_hourly — users/alert_events/system_settings исключены осознанно",
+       "docker compose config валиден; реальный запуск и живая накатка миграции не проверялись (Docker недоступен в среде разработки)"],
+     evidence:"docker-compose.yml:18-34; db/migrations/000001_init_schema.up.sql; db/migrations/000002_llm_analytics_readonly.up.sql; docs/database-schema.md"},
+    {id:"rest-api", type:"service", layer:5, status:"partial",
+     path:"api/", role:"REST API на Go — chi + pgx + sqlc; первая ручка сделана, остальное спроектировано",
+     entrypoints:["api/cmd/api/main.go:59 (healthHandler → GET /health)"], tests:[],
+     constraints:["Стек сменён с .NET Minimal API на Go (2026-08-08) — Consumer остаётся на .NET",
+       "GET /health реализован и проверен живьём (go run + curl → {\"status\":\"ok\"}); остальной код не написан",
+       "Полная структура (CRUD controllers/sensors/users/alert_events + WebSocket-канал метрик) спроектирована в docs/api-architecture.md, не реализована",
+       "WebSocket-данные — через Postgres LISTEN/NOTIFY; NOTIFY-триггер — будущая миграция 000003 (000002 занята LLM Analytics)",
+       "LLM Analytics (internal/analytics + internal/llm, спроектировано 2026-08-09): POST /analytics/query, LLM — только парсер естественного языка в аргументы функций (tool calling), инструменты get_controller_sensors/get_sensor_summary — детерминированный SQL, не более 5-6 итераций цикла",
+       "Сознательно отклонено для LLM Analytics на этом этапе: отдельный микросервис, Python-sandbox для произвольной генерации кода, материализованная таблица llm_context — см. docs/api-architecture.md",
+       "Миграции НЕ внутри api/ — общий db/migrations/, см. узел db-migrations"],
+     evidence:"api/cmd/api/main.go:1-73; docs/api-architecture.md"},
+    {id:"llm-provider", type:"external", layer:5, status:"planned",
+     path:"internal/llm/client.go (план)", role:"Внешний LLM API — провайдер не зафиксирован (Claude/OpenAI/др.), спрятан за интерфейсом llm.Client",
+     entrypoints:[], tests:[],
+     constraints:["Client interface: Generate(messages, tools) — agent.go работает только с интерфейсом, замена провайдера не требует правок в analytics/",
+       "Реализация — прямые HTTP-вызовы к REST API провайдера, без тяжёлого официального SDK",
+       "Ключ — LLM_API_KEY в .env (пусто в .env.example, у каждого разработчика свой)"],
+     evidence:"docs/api-architecture.md — раздел «LLM Analytics»"},
+    {id:"dashboard-ui", type:"frontend", layer:6, status:"implemented",
+     path:"ui/", role:"Веб-дашборд — Vue 3 + Vite, каркас без подключения к бэкенду",
+     entrypoints:["ui/src/main.ts"], tests:["ui/src/__tests__/App.spec.ts"],
+     constraints:["App.vue, router, Pinia-заглушка (stores/counter.ts), AppScaffold/SideBar, MainPage",
+       "axios есть в зависимостях, но ни одного реального вызова к API в коде нет",
+       "Стек разошёлся с исходным планом: Nuxt 4 → Vue 3 + Vite"],
+     evidence:"ui/package.json; ui/src/main.ts"}
+  ],
+  edges: [
+    {from:"docker-compose", to:"mqtt-broker", type:"calls", status:"implemented", evidence:"docker-compose.yml:2-9"},
+    {from:"docker-compose", to:"fake-sensor", type:"calls", status:"implemented", evidence:"docker-compose.yml:11-16"},
+    {from:"docker-compose", to:"timescaledb", type:"calls", status:"implemented", evidence:"docker-compose.yml:18-34"},
+    {from:"docker-compose", to:"db-migrations", type:"calls", status:"implemented", evidence:"docker-compose.yml:39-51"},
+    {from:"fake-sensor", to:"mqtt-broker", type:"publishes", status:"implemented", evidence:"sensor/simulator.py:83-87 (топик gateway/{GATEWAY_ID}/{metric})"},
+    {from:"dotnet-consumer", to:"mqtt-broker", type:"subscribes", status:"planned", evidence:"unknown — планируется, кода нет"},
+    {from:"dotnet-consumer", to:"timescaledb", type:"writes", status:"planned", evidence:"unknown — планируется, кода нет"},
+    {from:"db-migrations", to:"timescaledb", type:"writes", status:"implemented", evidence:"db/migrations/000001_init_schema.up.sql:1-150 (применяется сервисом migrate)"},
+    {from:"rest-api", to:"timescaledb", type:"reads", status:"planned", evidence:"unknown — api/cmd/api/main.go пока не подключается к БД, только /health"},
+    {from:"dashboard-ui", to:"rest-api", type:"calls", status:"planned", evidence:"unknown — axios в зависимостях, но ни одного вызова к API в исходниках нет"},
+    {from:"rest-api", to:"llm-provider", type:"calls", status:"planned", evidence:"docs/api-architecture.md — internal/llm/client.go, кода ещё нет"}
+  ],
+  flows: [
+    {id:"flow-sensor-publish", key:"1", status:"implemented",
+     trigger:"Таймер в sensor/simulator.py — тик каждые PUBLISH_INTERVAL_SEC сек",
+     steps:["fake-sensor","mqtt-broker"],
+     outcome:"Сообщение доставляется в топик Mosquitto. Требует рабочего sensor/.env в build-контексте (gitignored); реальная сборка не проверялась."},
+    {id:"flow-compose-up", key:"2", status:"implemented",
+     trigger:"docker compose up --build (или make up)",
+     steps:["docker-compose","mqtt-broker","fake-sensor","timescaledb","db-migrations"],
+     outcome:"5 сервисов поднимаются, migrate накатывает схему на db. docker compose config валиден; живой запуск не проверялся — Docker недоступен в среде разработки."},
+    {id:"flow-db-bootstrap", key:"3", status:"implemented",
+     trigger:"Сервис migrate стартует после db: condition: service_healthy",
+     steps:["timescaledb","db-migrations"],
+     outcome:"db/migrations/000001_init_schema.up.sql применяется к пустой БД: 6 таблиц, retention policy, continuous aggregate. Не проверено живым запуском."},
+    {id:"flow-api-health", key:"4", status:"implemented",
+     trigger:"go run ./cmd/api && curl localhost:8080/health",
+     steps:["rest-api"],
+     outcome:"Проверено вживую в этой сессии: возвращает {\"status\":\"ok\"}, HTTP 200. Единственный работающий кусок API на сегодня."},
+    {id:"flow-e2e-target", key:"5", status:"planned",
+     trigger:"fake-sensor публикует показание (целевой e2e-поток из docs/PROJECT.md)",
+     steps:["fake-sensor","mqtt-broker","dotnet-consumer","timescaledb","rest-api","dashboard-ui"],
+     outcome:"Целевой результат — обновление графика на дашборде в реальном времени. Из цепочки реально работают fake-sensor, mqtt-broker и timescaledb (с миграциями); dotnet-consumer не реализован, rest-api умеет только /health, dashboard-ui не подключён."}
+  ]
+};
 
-    const simulation = d3.forceSimulation(graphData.nodes)
-      .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(150))
-      .force("charge", d3.forceManyBody().strength(-800))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+const nodeById = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
+const TYPE_BADGE = {orchestration:"C", service:"S", broker:"B", database:"D", migration:"M", frontend:"F", external:"E"};
+const STATUS_LABEL = {implemented:"реализовано", partial:"частично", planned:"запланировано"};
+const STATUS_TAG = {implemented:"✓", partial:"~", planned:"план"};
 
-    const link = g.append("g")
-      .selectAll("path")
-      .data(graphData.edges)
-      .join("path")
-        .attr("class", "link")
-        .attr("marker-end", "url(#end)");
+let lodLow = false;
+let selectedNode = null;
+let selectedFlow = null;
+let zoom = 1, panX = 0, panY = 0;
 
-    const getColor = (group) => {
-      if(group === 'db') return 'var(--node-db)';
-      if(group === 'queue') return 'var(--node-queue)';
-      if(group === 'ui') return 'var(--node-ui)';
-      return 'var(--node-core)';
-    };
+const NODE_W = 200, NODE_H = 64, LAYER_GAP = 130, COL_GAP = 240;
 
-    const node = g.append("g")
-      .selectAll("g")
-      .data(graphData.nodes)
-      .join("g")
-        .attr("class", "node")
-        .call(d3.drag()
-          .on("start", dragstarted)
-          .on("drag", dragged)
-          .on("end", dragended))
-        .on("click", (e, d) => {
-          // Highlight logic
-          node.classed("dimmed", n => n !== d && !isConnected(n, d));
-          link.classed("dimmed", l => l.source !== d && l.target !== d);
-          link.classed("highlight", l => l.source === d || l.target === d);
-          
-          // Update details panel
-          document.getElementById('node-details').style.display = 'block';
-          document.getElementById('nd-title').innerText = d.id;
-          document.getElementById('nd-role').innerText = d.role;
-          document.getElementById('nd-path').innerText = d.path;
-          document.getElementById('info-panel').classList.add('open');
-          e.stopPropagation();
-        });
+function computeLayout(){
+  const byLayer = {};
+  DATA.nodes.forEach(n => { (byLayer[n.layer] = byLayer[n.layer] || []).push(n); });
+  const layers = Object.keys(byLayer).map(Number).sort((a,b)=>a-b);
+  layers.forEach(l => {
+    const row = byLayer[l];
+    row.forEach((n, i) => {
+      n.x = (i - (row.length-1)/2) * COL_GAP;
+      n.y = l * LAYER_GAP;
+    });
+  });
+}
+computeLayout();
 
-    function isConnected(a, b) {
-      return graphData.edges.some(l => (l.source === a && l.target === b) || (l.source === b && l.target === a));
-    }
+const svg = document.getElementById("graph");
+const viewport = document.getElementById("viewport");
+const edgesLayer = document.getElementById("edges-layer");
+const nodesLayer = document.getElementById("nodes-layer");
 
-    svg.on("click", () => {
-      node.classed("dimmed", false);
-      link.classed("dimmed", false).classed("highlight", false);
-      document.getElementById('node-details').style.display = 'none';
+function renderNodes(){
+  nodesLayer.innerHTML = "";
+  DATA.nodes.forEach(n => {
+    const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("class","node-group");
+    g.setAttribute("data-id", n.id);
+    g.setAttribute("transform", `translate(${n.x - NODE_W/2}, ${n.y})`);
+
+    const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("class","node-rect" + (n.status !== "implemented" ? " " + n.status : ""));
+    rect.setAttribute("width", NODE_W); rect.setAttribute("height", NODE_H); rect.setAttribute("rx", 10);
+    g.appendChild(rect);
+
+    const badge = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    badge.setAttribute("x", 10); badge.setAttribute("y", 10);
+    badge.setAttribute("width", 20); badge.setAttribute("height", 20); badge.setAttribute("rx", 5);
+    badge.setAttribute("class", "node-badge-bg");
+    g.appendChild(badge);
+    const badgeText = document.createElementNS("http://www.w3.org/2000/svg","text");
+    badgeText.setAttribute("x", 20); badgeText.setAttribute("y", 24);
+    badgeText.setAttribute("text-anchor","middle"); badgeText.setAttribute("class","node-badge-text");
+    badgeText.textContent = TYPE_BADGE[n.type] || "?";
+    g.appendChild(badgeText);
+
+    // r как CSS-свойство для <circle> не поддерживается в Safari < 16 (CSS Geometry
+    // properties для SVG-фигур) — без явного атрибута радиус там был бы 0 (невидимая точка).
+    // Задаём явно, CSS .status-dot{r:3.5} в более новых браузерах просто не переопределяет то же
+    // значение.
+    const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    dot.setAttribute("class","status-dot " + n.status);
+    dot.setAttribute("cx", NODE_W - 16); dot.setAttribute("cy", 16); dot.setAttribute("r", 3.5);
+    g.appendChild(dot);
+
+    const title = document.createElementNS("http://www.w3.org/2000/svg","text");
+    title.setAttribute("x", 38); title.setAttribute("y", 27);
+    title.setAttribute("class","node-title");
+    title.textContent = n.id;
+    g.appendChild(title);
+
+    const sub = document.createElementNS("http://www.w3.org/2000/svg","text");
+    sub.setAttribute("x", 12); sub.setAttribute("y", 48);
+    sub.setAttribute("class","node-sub");
+    sub.textContent = lodLow ? (n.entrypoints[0] || n.path).slice(0, 30) : n.type;
+    g.appendChild(sub);
+
+    g.addEventListener("click", (e) => { e.stopPropagation(); selectNode(n.id); });
+    nodesLayer.appendChild(g);
+  });
+}
+
+function edgeAnchor(from, to){
+  const a = nodeById[from], b = nodeById[to];
+  const x1 = a.x, y1 = a.y + (b.y >= a.y ? NODE_H : 0);
+  const x2 = b.x, y2 = b.y + (b.y >= a.y ? 0 : NODE_H);
+  return {x1,y1,x2,y2};
+}
+
+function renderEdges(){
+  edgesLayer.innerHTML = "";
+  DATA.edges.forEach(e => {
+    const {x1,y1,x2,y2} = edgeAnchor(e.from, e.to);
+    const midY = (y1+y2)/2;
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+    path.setAttribute("d", d);
+    path.setAttribute("class","edge-path" + (e.status === "planned" ? " planned" : ""));
+    path.setAttribute("data-from", e.from); path.setAttribute("data-to", e.to);
+    edgesLayer.appendChild(path);
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", (x1+x2)/2 + 8); label.setAttribute("y", midY);
+    label.setAttribute("class","edge-label");
+    label.setAttribute("data-from", e.from); label.setAttribute("data-to", e.to);
+    label.textContent = e.type;
+    edgesLayer.appendChild(label);
+  });
+}
+
+function clearHighlight(){
+  document.querySelectorAll(".node-group").forEach(el => el.classList.remove("dimmed","selected","in-path"));
+  document.querySelectorAll(".edge-path").forEach(el => el.classList.remove("dimmed","in-path"));
+  document.querySelectorAll(".edge-label").forEach(el => el.classList.remove("dimmed"));
+}
+
+function blastRadius(nodeId){
+  const related = new Set([nodeId]);
+  DATA.edges.forEach(e => {
+    if(e.from === nodeId) related.add(e.to);
+    if(e.to === nodeId) related.add(e.from);
+  });
+  document.querySelectorAll(".node-group").forEach(el => {
+    if(related.has(el.dataset.id)) el.classList.remove("dimmed");
+    else el.classList.add("dimmed");
+  });
+  document.querySelectorAll(".edge-path,.edge-label").forEach(el => {
+    if(el.dataset.from === nodeId || el.dataset.to === nodeId) el.classList.remove("dimmed");
+    else el.classList.add("dimmed");
+  });
+}
+
+function highlightFlow(flow){
+  const steps = new Set(flow.steps);
+  document.querySelectorAll(".node-group").forEach(el => {
+    if(steps.has(el.dataset.id)){ el.classList.remove("dimmed"); el.classList.add("in-path"); }
+    else el.classList.add("dimmed");
+  });
+  document.querySelectorAll(".edge-path,.edge-label").forEach(el => {
+    const idx1 = flow.steps.indexOf(el.dataset.from), idx2 = flow.steps.indexOf(el.dataset.to);
+    if(idx1 !== -1 && idx2 !== -1 && Math.abs(idx1-idx2) === 1){
+      el.classList.remove("dimmed"); if(el.classList.contains("edge-path")) el.classList.add("in-path");
+    } else el.classList.add("dimmed");
+  });
+}
+
+function selectNode(id, pushHash=true){
+  clearHighlight();
+  selectedFlow = null;
+  selectedNode = id;
+  const n = nodeById[id];
+  if(!n) return;
+  document.querySelector(`.node-group[data-id="${id}"]`).classList.add("selected");
+  blastRadius(id);
+  renderDetailNode(n);
+  renderSidebarSelection();
+  if(pushHash) location.hash = "node=" + id;
+}
+
+function selectFlow(flowId, pushHash=true){
+  clearHighlight();
+  selectedNode = null;
+  const flow = DATA.flows.find(f => f.id === flowId);
+  if(!flow) return;
+  selectedFlow = flowId;
+  highlightFlow(flow);
+  renderDetailFlow(flow);
+  renderSidebarSelection();
+  if(pushHash) location.hash = "flow=" + flowId;
+}
+
+function deselectAll(){
+  clearHighlight();
+  selectedNode = null; selectedFlow = null;
+  document.getElementById("detail").classList.remove("open");
+  renderSidebarSelection();
+  history.replaceState(null, "", location.pathname + location.search);
+}
+
+function renderDetailNode(n){
+  const exists = n.status !== "planned";
+  const link = exists ? ghLink(n.path, null) : null;
+  const entryLinks = n.entrypoints.map(ep => {
+    if(!exists) return `<div>${ep}</div>`;
+    const m = ep.match(/^([^\s:]+)(?::(\d+))?/);
+    const url = m ? ghLink(m[1], m[2] || null) : null;
+    return url ? `<div><a class="src-link" href="${url}" target="_blank" rel="noopener">${ep} ↗</a></div>` : `<div>${ep}</div>`;
+  }).join("") || "<div style='color:var(--text-faint)'>—</div>";
+
+  document.getElementById("detail-body").innerHTML = `
+    <span class="status-tag ${n.status}">${STATUS_LABEL[n.status]}</span>
+    <h2>${n.id}</h2>
+    <div class="role">${n.role}</div>
+    <h4>Путь</h4><div>${n.path}</div>
+    <h4>Точки входа</h4>${entryLinks}
+    <h4>Ограничения</h4><ul>${n.constraints.length ? n.constraints.map(c=>`<li>${c}</li>`).join("") : "<li>—</li>"}</ul>
+    ${n.tests.length ? `<h4>Тесты</h4><ul>${n.tests.map(t=>`<li>${t}</li>`).join("")}</ul>` : ""}
+    <h4>Evidence</h4><div>${n.evidence}</div>
+    ${link ? `<a class="src-link" href="${link}" target="_blank" rel="noopener">Открыть в GitHub ↗</a>` : ""}
+  `;
+  document.getElementById("detail").classList.add("open");
+}
+
+function renderDetailFlow(flow){
+  document.getElementById("detail-body").innerHTML = `
+    <span class="status-tag ${flow.status}">${STATUS_LABEL[flow.status]}</span>
+    <h2>Поток: ${flow.id}</h2>
+    <h4>Триггер</h4><div>${flow.trigger}</div>
+    <h4>Шаги</h4>
+    <div class="flow-steps">${flow.steps.map((s,i)=>`<div class="flow-step">${i+1}. ${s}</div>`).join("")}</div>
+    <h4>Результат</h4><div>${flow.outcome}</div>
+  `;
+  document.getElementById("detail").classList.add("open");
+}
+
+function renderSidebar(){
+  const nl = document.getElementById("node-list");
+  nl.innerHTML = "";
+  DATA.nodes.forEach(n => {
+    const div = document.createElement("div");
+    div.className = "list-item"; div.dataset.id = n.id;
+    div.innerHTML = `<span>${n.id}</span><span class="tag">${STATUS_TAG[n.status]}</span>`;
+    div.addEventListener("click", () => selectNode(n.id));
+    nl.appendChild(div);
+  });
+  const fl = document.getElementById("flow-list");
+  fl.innerHTML = "";
+  DATA.flows.forEach(f => {
+    const div = document.createElement("div");
+    div.className = "list-item"; div.dataset.id = f.id;
+    div.innerHTML = `<span>${f.key}. ${f.trigger.slice(0,26)}…</span><span class="tag">${STATUS_TAG[f.status]}</span>`;
+    div.addEventListener("click", () => selectFlow(f.id));
+    fl.appendChild(div);
+  });
+}
+
+function renderSidebarSelection(){
+  document.querySelectorAll("#node-list .list-item, #flow-list .list-item").forEach(el => {
+    el.classList.toggle("selected", el.dataset.id === selectedNode || el.dataset.id === selectedFlow);
+  });
+}
+
+function applyTransform(){
+  viewport.setAttribute("transform", `translate(${panX},${panY}) scale(${zoom})`);
+  updateMinimapViewport();
+}
+
+function fitView(){
+  const xs = DATA.nodes.map(n=>n.x), ys = DATA.nodes.map(n=>n.y);
+  const minX = Math.min(...xs) - NODE_W, maxX = Math.max(...xs) + NODE_W;
+  const minY = Math.min(...ys) - 60, maxY = Math.max(...ys) + NODE_H + 60;
+  const w = svg.clientWidth, h = svg.clientHeight;
+  const contentW = maxX - minX, contentH = maxY - minY;
+  zoom = Math.min(w / contentW, h / contentH, 1.1);
+  panX = w/2 - (minX + contentW/2) * zoom;
+  panY = 40 - minY * zoom;
+  applyTransform();
+}
+
+function renderMinimap(){
+  const mm = document.getElementById("minimap-nodes");
+  mm.innerHTML = "";
+  const xs = DATA.nodes.map(n=>n.x), ys = DATA.nodes.map(n=>n.y);
+  const minX = Math.min(...xs) - NODE_W, maxX = Math.max(...xs) + NODE_W;
+  const minY = Math.min(...ys) - 40, maxY = Math.max(...ys) + NODE_H + 40;
+  const sx = 1000 / (maxX - minX), sy = 1000 / (maxY - minY);
+  DATA.nodes.forEach(n => {
+    const r = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    r.setAttribute("x", (n.x - NODE_W/2 - minX) * sx);
+    r.setAttribute("y", (n.y - minY) * sy);
+    r.setAttribute("width", NODE_W * sx); r.setAttribute("height", NODE_H * sy);
+    r.setAttribute("rx", 20); r.setAttribute("class", "arrow-fill");
+    mm.appendChild(r);
+  });
+  window._mmScale = {sx, sy, minX, minY};
+}
+
+function updateMinimapViewport(){
+  if(!window._mmScale) return;
+  const {sx, sy, minX, minY} = window._mmScale;
+  const w = svg.clientWidth / zoom, h = svg.clientHeight / zoom;
+  const x0 = (-panX/zoom - minX) * sx;
+  const y0 = (-panY/zoom - minY) * sy;
+  const vp = document.getElementById("minimap-viewport");
+  vp.setAttribute("x", x0); vp.setAttribute("y", y0);
+  vp.setAttribute("width", w * sx); vp.setAttribute("height", h * sy);
+}
+
+let dragging = false, dragStart = {x:0,y:0}, panStart = {x:0,y:0};
+svg.addEventListener("mousedown", (e) => {
+  dragging = true; svg.classList.add("grabbing");
+  dragStart = {x:e.clientX, y:e.clientY}; panStart = {x:panX, y:panY};
+});
+window.addEventListener("mousemove", (e) => {
+  if(!dragging) return;
+  panX = panStart.x + (e.clientX - dragStart.x);
+  panY = panStart.y + (e.clientY - dragStart.y);
+  applyTransform();
+});
+window.addEventListener("mouseup", () => { dragging = false; svg.classList.remove("grabbing"); });
+svg.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  zoom = Math.min(Math.max(zoom * delta, 0.3), 3);
+  applyTransform();
+}, {passive:false});
+svg.addEventListener("click", (e) => { if(e.target === svg) deselectAll(); });
+
+document.getElementById("zoom-in").addEventListener("click", () => { zoom = Math.min(zoom*1.2, 3); applyTransform(); });
+document.getElementById("zoom-out").addEventListener("click", () => { zoom = Math.max(zoom*0.8, 0.3); applyTransform(); });
+document.getElementById("zoom-reset").addEventListener("click", fitView);
+
+document.getElementById("btn-about").addEventListener("click", () => {
+  document.getElementById("about").classList.toggle("open");
+});
+document.getElementById("btn-sidebar").addEventListener("click", () => {
+  document.getElementById("sidebar").classList.toggle("collapsed");
+});
+document.getElementById("btn-theme").addEventListener("click", () => {
+  const html = document.documentElement;
+  const cur = html.getAttribute("data-theme");
+  html.setAttribute("data-theme", cur === "light" ? "dark" : "light");
+});
+document.getElementById("btn-fullscreen").addEventListener("click", toggleFullscreen);
+function toggleFullscreen(){
+  if(!document.fullscreenElement) document.getElementById("app").requestFullscreen().catch(()=>{});
+  else document.exitFullscreen();
+}
+
+document.getElementById("lod-high").addEventListener("click", () => setLod(false));
+document.getElementById("lod-low").addEventListener("click", () => setLod(true));
+function setLod(low){
+  lodLow = low;
+  document.getElementById("lod-high").classList.toggle("active", !low);
+  document.getElementById("lod-low").classList.toggle("active", low);
+  renderNodes();
+  if(selectedNode) blastRadius(selectedNode), document.querySelector(`.node-group[data-id="${selectedNode}"]`)?.classList.add("selected");
+  if(selectedFlow) highlightFlow(DATA.flows.find(f=>f.id===selectedFlow));
+}
+
+const DRIFT = {
+  newNodes: ["llm-provider"],
+  changedNodes: ["db-migrations", "timescaledb", "rest-api"],
+  note: "Новое: llm-provider (внешний LLM API за интерфейсом internal/llm.Client, провайдер не зафиксирован). Изменилось: db-migrations (добавлена 000002_llm_analytics_readonly — read-only роль + stddev/count в sensor_readings_hourly), timescaledb (те же правки применены к схеме: analytics_readonly с точечным GRANT SELECT), rest-api (спроектирован LLM Analytics — POST /analytics/query, tool-calling цикл; NOTIFY-миграция для WS сдвинута с 000002 на 000003). dotnet-consumer и dashboard-ui — без изменений."
+};
+let deltaShown = false;
+document.getElementById("btn-delta").addEventListener("click", () => {
+  const banner = document.getElementById("delta-banner");
+  deltaShown = !deltaShown;
+  if(deltaShown){
+    banner.textContent = "Дрифт с прошлого codemap.lock: " + DRIFT.note;
+    document.querySelectorAll(".node-group").forEach(el => {
+      const isDrift = DRIFT.newNodes.includes(el.dataset.id) || DRIFT.changedNodes.includes(el.dataset.id);
+      el.classList.toggle("dimmed", !isDrift);
+      el.classList.toggle("in-path", isDrift);
+    });
+  } else {
+    clearHighlight();
+  }
+  banner.classList.toggle("show", deltaShown);
+});
+
+document.getElementById("detail-close").addEventListener("click", deselectAll);
+
+document.getElementById("search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll("#node-list .list-item").forEach(el => {
+    el.classList.toggle("dim-hidden", q && !el.dataset.id.toLowerCase().includes(q));
+  });
+  document.querySelectorAll(".node-group").forEach(el => {
+    const match = !q || el.dataset.id.toLowerCase().includes(q);
+    el.style.opacity = match ? "" : "0.15";
+  });
+});
+
+window.addEventListener("keydown", (e) => {
+  if(e.target.tagName === "INPUT") { if(e.key === "Escape") e.target.blur(); return; }
+
+  const dbOpen = document.getElementById("db-overlay").classList.contains("open");
+  if(dbOpen){
+    if(e.key === "Escape") closeDbSchema();
+    else if(e.key.toLowerCase() === "r") dbFitView();
+    return;
+  }
+
+  if(e.key === "/"){ e.preventDefault(); document.getElementById("search").focus(); }
+  else if(e.key === "Escape") deselectAll();
+  else if(e.key.toLowerCase() === "f") toggleFullscreen();
+  else if(e.key.toLowerCase() === "r") fitView();
+  else if(e.key.toLowerCase() === "d") openDbSchema();
+  else if(["1","2","3","4","5"].includes(e.key)){
+    const flow = DATA.flows.find(f => f.key === e.key);
+    if(flow) selectFlow(flow.id);
+  }
+});
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+document.getElementById("export-svg").addEventListener("click", () => {
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const blob = new Blob([new XMLSerializer().serializeToString(clone)], {type:"image/svg+xml"});
+  downloadBlob(blob, "codemap.svg");
+});
+document.getElementById("export-png").addEventListener("click", () => {
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const xml = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([xml], {type:"image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = svg.clientWidth * 2; canvas.height = svg.clientHeight * 2;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg");
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(b => downloadBlob(b, "codemap.png"));
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+});
+document.getElementById("export-mmd").addEventListener("click", () => {
+  let mmd = "graph TD\n";
+  DATA.nodes.forEach(n => { mmd += `  ${n.id}["${n.id}\\n(${n.status})"]\n`; });
+  DATA.edges.forEach(e => { mmd += `  ${e.from} -->|${e.type}${e.status==="planned"?" · planned":""}| ${e.to}\n`; });
+  downloadBlob(new Blob([mmd], {type:"text/plain"}), "codemap.mmd");
+});
+function downloadBlob(blob, name){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  showToast("Экспортировано: " + name);
+}
+
+/* ══════════════════════════ Схема БД (наглядная ER-диаграмма) ══════════════════════════
+   Источник истины — db/migrations/000001_init_schema.up.sql. Отдельная канва с собственным
+   pan/zoom (та же механика, что у архитектурного графа, но независимое состояние), потому что
+   это принципиально другой граф — таблицы с колонками, а не сервисы. */
+const DB_SCHEMA = {
+  tables: [
+    {id:"users", x:230, y:0, role:"Пользователи системы и роли доступа (admin/operator/viewer)",
+     columns:[
+       {name:"id", type:"UUID", flags:["PK"]},
+       {name:"username", type:"VARCHAR(50)", flags:["UQ","NN"]},
+       {name:"email", type:"VARCHAR(100)", flags:["UQ","NN"]},
+       {name:"password_hash", type:"VARCHAR(255)", flags:["NN"]},
+       {name:"role", type:"VARCHAR(20)", flags:["NN"]},
+       {name:"created_at", type:"TIMESTAMPTZ", flags:[]},
+       {name:"updated_at", type:"TIMESTAMPTZ", flags:[]}
+     ],
+     constraints:["CHECK (role IN ('admin','operator','viewer'))",
+       "Пока ни на что не ссылается FK — нет created_by/owner полей в других таблицах"],
+     evidence:"db/migrations/000001_init_schema.up.sql:6-13"},
+    {id:"controllers", x:-280, y:0, role:"Контроллеры/шлюзы (ПЛК, ESP32 и т.п.)",
+     columns:[
+       {name:"id", type:"UUID", flags:["PK"]},
+       {name:"name", type:"VARCHAR(100)", flags:["NN"]},
+       {name:"mqtt_gateway_id", type:"VARCHAR(100)", flags:["UQ","NN"]},
+       {name:"ip_address", type:"VARCHAR(45)", flags:[]},
+       {name:"location", type:"VARCHAR(255)", flags:[]},
+       {name:"is_active", type:"BOOLEAN", flags:[]},
+       {name:"created_at", type:"TIMESTAMPTZ", flags:[]},
+       {name:"updated_at", type:"TIMESTAMPTZ", flags:[]}
+     ],
+     constraints:["mqtt_gateway_id — сопоставление с gateway_id из MQTT-топика gateway/{gateway_id}/{metric}, отдельно от name (переименование в дашборде не ломает приём данных)"],
+     evidence:"db/migrations/000001_init_schema.up.sql:26-36"},
+    {id:"sensors", x:-280, y:290, role:"Датчики: MQTT-топик, тип метрики, пороги алертинга",
+     columns:[
+       {name:"id", type:"UUID", flags:["PK"]},
+       {name:"controller_id", type:"UUID", flags:["FK","NN"]},
+       {name:"name", type:"VARCHAR(100)", flags:["NN"]},
+       {name:"topic", type:"VARCHAR(255)", flags:["UQ","NN"]},
+       {name:"metric_type", type:"VARCHAR(50)", flags:["NN"]},
+       {name:"unit", type:"VARCHAR(20)", flags:["NN"]},
+       {name:"min_threshold", type:"DOUBLE PRECISION", flags:[]},
+       {name:"max_threshold", type:"DOUBLE PRECISION", flags:[]},
+       {name:"is_active", type:"BOOLEAN", flags:[]},
+       {name:"created_at", type:"TIMESTAMPTZ", flags:[]},
+       {name:"updated_at", type:"TIMESTAMPTZ", flags:[]}
+     ],
+     constraints:["controller_id → controllers.id ON DELETE CASCADE, NOT NULL (датчик без контроллера — невалидное состояние)",
+       "CHECK (min_threshold < max_threshold), если оба заданы",
+       "Индекс idx_sensors_controller_id — FK-колонки не индексируются автоматически"],
+     evidence:"db/migrations/000001_init_schema.up.sql:49-63"},
+    {id:"system_settings", x:230, y:290, role:"Глобальные настройки системы в формате key-value",
+     columns:[
+       {name:"key", type:"VARCHAR(100)", flags:["PK"]},
+       {name:"value", type:"TEXT", flags:["NN"]},
+       {name:"description", type:"TEXT", flags:[]},
+       {name:"updated_at", type:"TIMESTAMPTZ", flags:[]}
+     ],
+     constraints:["Без FK-связей — независимая таблица конфигурации (интервалы опроса, флаги функциональности)"],
+     evidence:"db/migrations/000001_init_schema.up.sql:79-84"},
+    {id:"sensor_readings", x:-480, y:620, role:"Временные ряды показаний — TimescaleDB hypertable",
+     columns:[
+       {name:"time", type:"TIMESTAMPTZ", flags:["PK","NN"]},
+       {name:"sensor_id", type:"UUID", flags:["PK","FK","NN"]},
+       {name:"value", type:"DOUBLE PRECISION", flags:["NN"]}
+     ],
+     constraints:["sensor_id → sensors.id ON DELETE CASCADE",
+       "PRIMARY KEY (sensor_id, time) — защита от дублей при повторной доставке",
+       "create_hypertable по time; idx_sensor_readings_time (sensor_id, time DESC)",
+       "Retention policy 90 дней (плейсхолдер) + continuous aggregate sensor_readings_hourly (avg/min/max по часу)"],
+     evidence:"db/migrations/000001_init_schema.up.sql:93-99"},
+    {id:"alert_events", x:-60, y:620, role:"История срабатываний порогов алертинга",
+     columns:[
+       {name:"id", type:"UUID", flags:["PK"]},
+       {name:"sensor_id", type:"UUID", flags:["FK","NN"]},
+       {name:"threshold_type", type:"VARCHAR(10)", flags:["NN"]},
+       {name:"threshold_value", type:"DOUBLE PRECISION", flags:["NN"]},
+       {name:"reading_value", type:"DOUBLE PRECISION", flags:["NN"]},
+       {name:"triggered_at", type:"TIMESTAMPTZ", flags:["NN"]},
+       {name:"resolved_at", type:"TIMESTAMPTZ", flags:[]}
+     ],
+     constraints:["sensor_id → sensors.id ON DELETE CASCADE",
+       "CHECK (threshold_type IN ('min','max'))",
+       "threshold_value — снимок порога на момент срабатывания, не ссылка на текущий sensors.min/max_threshold",
+       "resolved_at = NULL — алерт активен; частичный индекс idx_alert_events_active (sensor_id) WHERE resolved_at IS NULL"],
+     evidence:"db/migrations/000001_init_schema.up.sql:129-138"}
+  ],
+  relations: [
+    {from:"sensors", to:"controllers", fromCol:"controller_id", label:"N:1 · CASCADE"},
+    {from:"sensor_readings", to:"sensors", fromCol:"sensor_id", label:"N:1 · CASCADE"},
+    {from:"alert_events", to:"sensors", fromCol:"sensor_id", label:"N:1 · CASCADE"}
+  ]
+};
+
+const TABLE_W = 260, ROW_H = 20, HEADER_H = 30, PAD_TOP = 8;
+const tableById = Object.fromEntries(DB_SCHEMA.tables.map(t => [t.id, t]));
+DB_SCHEMA.tables.forEach(t => { t.h = HEADER_H + PAD_TOP + t.columns.length * ROW_H + 8; });
+
+const dbSvg = document.getElementById("db-graph");
+const dbViewport = document.getElementById("db-viewport");
+const dbEdgesLayer = document.getElementById("db-edges-layer");
+const dbNodesLayer = document.getElementById("db-nodes-layer");
+let dbZoom = 1, dbPanX = 0, dbPanY = 0;
+let dbSelected = null;
+
+function renderDbTables(){
+  dbNodesLayer.innerHTML = "";
+  DB_SCHEMA.tables.forEach(t => {
+    const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("class","table-group");
+    g.setAttribute("data-id", t.id);
+    g.setAttribute("transform", `translate(${t.x - TABLE_W/2}, ${t.y})`);
+
+    const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("class","table-rect");
+    rect.setAttribute("width", TABLE_W); rect.setAttribute("height", t.h); rect.setAttribute("rx", 10);
+    g.appendChild(rect);
+
+    const headerBg = document.createElementNS("http://www.w3.org/2000/svg","path");
+    headerBg.setAttribute("class","table-header-bg");
+    headerBg.setAttribute("d", `M0,10 A10,10 0 0 1 10,0 H${TABLE_W-10} A10,10 0 0 1 ${TABLE_W},10 V${HEADER_H} H0 Z`);
+    g.appendChild(headerBg);
+
+    const title = document.createElementNS("http://www.w3.org/2000/svg","text");
+    title.setAttribute("x", 12); title.setAttribute("y", 20);
+    title.setAttribute("class","table-title");
+    title.textContent = t.id;
+    g.appendChild(title);
+
+    const sub = document.createElementNS("http://www.w3.org/2000/svg","text");
+    sub.setAttribute("x", TABLE_W - 10); sub.setAttribute("y", 20);
+    sub.setAttribute("text-anchor", "end");
+    sub.setAttribute("class","table-sub");
+    sub.textContent = t.columns.length + " кол.";
+    g.appendChild(sub);
+
+    t.columns.forEach((c, i) => {
+      const rowY = HEADER_H + PAD_TOP + i * ROW_H;
+      const name = document.createElementNS("http://www.w3.org/2000/svg","text");
+      name.setAttribute("x", 14); name.setAttribute("y", rowY + 14);
+      name.setAttribute("class", "col-name");
+      name.textContent = c.name;
+      g.appendChild(name);
+
+      const type = document.createElementNS("http://www.w3.org/2000/svg","text");
+      type.setAttribute("x", TABLE_W - 10); type.setAttribute("y", rowY + 14);
+      type.setAttribute("text-anchor", "end");
+      type.setAttribute("class", "col-type");
+      type.textContent = c.type;
+      g.appendChild(type);
+
+      if(c.flags.includes("PK") || c.flags.includes("FK")){
+        const flag = document.createElementNS("http://www.w3.org/2000/svg","text");
+        flag.setAttribute("x", 2); flag.setAttribute("y", rowY + 14);
+        flag.setAttribute("class", c.flags.includes("PK") ? "col-flag-pk" : "col-flag-fk");
+        flag.textContent = c.flags.includes("PK") ? "🔑" : "↷";
+        g.appendChild(flag);
+      }
     });
 
-    node.append("rect")
-      .attr("width", 120)
-      .attr("height", 40)
-      .attr("x", -60)
-      .attr("y", -20)
-      .attr("fill", d => getColor(d.group));
+    g.addEventListener("click", (e) => { e.stopPropagation(); selectTable(t.id); });
+    dbNodesLayer.appendChild(g);
+  });
+}
 
-    node.append("text")
-      .attr("dy", 4)
-      .attr("text-anchor", "middle")
-      .text(d => d.id);
+function dbEdgeAnchor(fromId, toId){
+  const a = tableById[fromId], b = tableById[toId];
+  // "многие" (a) обычно ниже "одного" (b) в нашей ручной раскладке — соединяем верх a с низом b,
+  // но считаем честно по факту относительного положения, а не предполагаем заранее.
+  const aBelow = a.y >= b.y;
+  const x1 = a.x, y1 = a.y + (aBelow ? 0 : a.h);
+  const x2 = b.x, y2 = b.y + (aBelow ? b.h : 0);
+  return {x1,y1,x2,y2};
+}
 
-    simulation.on("tick", () => {
-      link.attr("d", d => {
-        const dx = d.target.x - d.source.x,
-              dy = d.target.y - d.source.y,
-              dr = Math.sqrt(dx * dx + dy * dy);
-        // straight lines: return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
-        // curved lines:
-        return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
-      });
-      node.attr("transform", d => `translate(${d.x},${d.y})`);
-    });
+function renderDbEdges(){
+  dbEdgesLayer.innerHTML = "";
+  DB_SCHEMA.relations.forEach(rel => {
+    const {x1,y1,x2,y2} = dbEdgeAnchor(rel.from, rel.to);
+    const midY = (y1+y2)/2;
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d", `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+    path.setAttribute("class","fk-edge");
+    path.setAttribute("data-from", rel.from); path.setAttribute("data-to", rel.to);
+    dbEdgesLayer.appendChild(path);
 
-    function dragstarted(e) { if (!e.active) simulation.alphaTarget(0.3).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; }
-    function dragged(e) { e.subject.fx = e.x; e.subject.fy = e.y; }
-    function dragended(e) { if (!e.active) simulation.alphaTarget(0); e.subject.fx = null; e.subject.fy = null; }
-  </script>
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", (x1+x2)/2 + 8); label.setAttribute("y", midY);
+    label.setAttribute("class","fk-edge-label");
+    label.setAttribute("data-from", rel.from); label.setAttribute("data-to", rel.to);
+    label.textContent = rel.fromCol + " → " + rel.label;
+    dbEdgesLayer.appendChild(label);
+  });
+}
+
+function dbClearHighlight(){
+  document.querySelectorAll(".table-group").forEach(el => el.classList.remove("dimmed","selected","in-path"));
+  document.querySelectorAll(".fk-edge").forEach(el => el.classList.remove("dimmed","in-path"));
+  document.querySelectorAll(".fk-edge-label").forEach(el => el.classList.remove("dimmed"));
+}
+
+function dbBlastRadius(tableId){
+  const related = new Set([tableId]);
+  DB_SCHEMA.relations.forEach(rel => {
+    if(rel.from === tableId) related.add(rel.to);
+    if(rel.to === tableId) related.add(rel.from);
+  });
+  document.querySelectorAll(".table-group").forEach(el => {
+    el.classList.toggle("dimmed", !related.has(el.dataset.id));
+  });
+  document.querySelectorAll(".fk-edge,.fk-edge-label").forEach(el => {
+    const hit = el.dataset.from === tableId || el.dataset.to === tableId;
+    el.classList.toggle("dimmed", !hit);
+    if(el.classList.contains("fk-edge")) el.classList.toggle("in-path", hit);
+  });
+}
+
+function selectTable(id){
+  dbClearHighlight();
+  dbSelected = id;
+  const t = tableById[id];
+  if(!t) return;
+  document.querySelector(`.table-group[data-id="${id}"]`).classList.add("selected");
+  dbBlastRadius(id);
+
+  const link = ghLink("db/migrations/000001_init_schema.up.sql", null);
+  const rows = t.columns.map(c => {
+    const flags = c.flags.map(f => `<span class="flag-${f==="PK"?"pk":f==="FK"?"fk":""}">${f}</span>`).join(" ");
+    return `<div class="col-row"><span><b>${c.name}</b> ${c.type}</span><span>${flags}</span></div>`;
+  }).join("");
+
+  document.getElementById("db-detail-body").innerHTML = `
+    <span class="col-table">таблица</span>
+    <h2>${t.id}</h2>
+    <div class="role">${t.role}</div>
+    <h4>Колонки (${t.columns.length})</h4>
+    ${rows}
+    <h4>Ограничения</h4><ul>${t.constraints.map(c=>`<li>${c}</li>`).join("")}</ul>
+    <h4>Evidence</h4><div>${t.evidence}</div>
+    ${link ? `<a class="src-link" href="${link}" target="_blank" rel="noopener">Открыть миграцию в GitHub ↗</a>` : ""}
+  `;
+  document.getElementById("db-detail").classList.add("open");
+}
+
+function dbDeselectAll(){
+  dbClearHighlight();
+  dbSelected = null;
+  document.getElementById("db-detail").classList.remove("open");
+}
+
+function dbApplyTransform(){
+  dbViewport.setAttribute("transform", `translate(${dbPanX},${dbPanY}) scale(${dbZoom})`);
+}
+
+function dbFitView(){
+  const xs1 = DB_SCHEMA.tables.map(t=>t.x - TABLE_W/2), xs2 = DB_SCHEMA.tables.map(t=>t.x + TABLE_W/2);
+  const ys1 = DB_SCHEMA.tables.map(t=>t.y), ys2 = DB_SCHEMA.tables.map(t=>t.y + t.h);
+  const minX = Math.min(...xs1) - 20, maxX = Math.max(...xs2) + 20;
+  const minY = Math.min(...ys1) - 20, maxY = Math.max(...ys2) + 20;
+  const w = dbSvg.clientWidth, h = dbSvg.clientHeight;
+  const contentW = maxX - minX, contentH = maxY - minY;
+  dbZoom = Math.min(w / contentW, h / contentH, 1.1);
+  dbPanX = w/2 - (minX + contentW/2) * dbZoom;
+  dbPanY = 30 - minY * dbZoom;
+  dbApplyTransform();
+}
+
+let dbDragging = false, dbDragStart = {x:0,y:0}, dbPanStart = {x:0,y:0};
+dbSvg.addEventListener("mousedown", (e) => {
+  dbDragging = true; dbSvg.classList.add("grabbing");
+  dbDragStart = {x:e.clientX, y:e.clientY}; dbPanStart = {x:dbPanX, y:dbPanY};
+});
+window.addEventListener("mousemove", (e) => {
+  if(!dbDragging) return;
+  dbPanX = dbPanStart.x + (e.clientX - dbDragStart.x);
+  dbPanY = dbPanStart.y + (e.clientY - dbDragStart.y);
+  dbApplyTransform();
+});
+window.addEventListener("mouseup", () => { dbDragging = false; dbSvg.classList.remove("grabbing"); });
+dbSvg.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  dbZoom = Math.min(Math.max(dbZoom * delta, 0.3), 3);
+  dbApplyTransform();
+}, {passive:false});
+dbSvg.addEventListener("click", (e) => { if(e.target === dbSvg) dbDeselectAll(); });
+
+document.getElementById("db-zoom-in").addEventListener("click", () => { dbZoom = Math.min(dbZoom*1.2, 3); dbApplyTransform(); });
+document.getElementById("db-zoom-out").addEventListener("click", () => { dbZoom = Math.max(dbZoom*0.8, 0.3); dbApplyTransform(); });
+document.getElementById("db-zoom-reset").addEventListener("click", dbFitView);
+document.getElementById("db-detail-close").addEventListener("click", dbDeselectAll);
+
+let dbInitialized = false;
+function openDbSchema(){
+  document.getElementById("db-overlay").classList.add("open");
+  if(!dbInitialized){
+    renderDbTables();
+    renderDbEdges();
+    dbInitialized = true;
+  }
+  dbFitView();
+}
+function closeDbSchema(){
+  document.getElementById("db-overlay").classList.remove("open");
+  dbDeselectAll();
+}
+document.getElementById("btn-dbschema").addEventListener("click", openDbSchema);
+document.getElementById("btn-dbschema-close").addEventListener("click", closeDbSchema);
+window.addEventListener("resize", () => {
+  if(document.getElementById("db-overlay").classList.contains("open")) dbFitView();
+});
+
+function init(){
+  document.getElementById("meta-commit").textContent = COMMIT.slice(0,10) + (WORKING_TREE_DIRTY ? "+dirty" : "");
+  document.getElementById("meta-commit").href = GH + "/commit/" + COMMIT;
+  document.getElementById("meta-time").textContent = GENERATED_AT.replace("T"," ").replace("Z"," UTC");
+  document.getElementById("meta-repo").href = GH;
+  document.getElementById("dirty-pill").style.display = WORKING_TREE_DIRTY ? "" : "none";
+
+  renderNodes();
+  renderEdges();
+  renderSidebar();
+  renderMinimap();
+  fitView();
+
+  const hash = location.hash.replace("#","");
+  if(hash.startsWith("node=")) selectNode(hash.slice(5), false);
+  else if(hash.startsWith("flow=")) selectFlow(hash.slice(5), false);
+}
+window.addEventListener("resize", () => { renderMinimap(); fitView(); });
+init();
+</script>
 </body>
 </html>

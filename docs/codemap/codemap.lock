@@ -1,9 +1,9 @@
 {
-  "commit": "f5592c543bcb543b4af61d85ce154a9f8083b2bf",
+  "commit": "a35d3b2d719dc08a826e9e2171168305ae68b8cc",
   "branch": "feature/db-and-go",
-  "working_tree_dirty": true,
-  "dirty_paths": [".env.example","docs/PROJECT.md","docs/api-architecture.md","docs/codemap/codemap.html","docs/codemap/codemap.json","db/migrations/000002_llm_analytics_readonly.down.sql","db/migrations/000002_llm_analytics_readonly.up.sql","docs/codemap/generate_lock.sh"],
-  "generated_at": "2026-08-09T07:35:19Z",
+  "working_tree_dirty": false,
+  "dirty_paths": [],
+  "generated_at": "2026-08-09T15:30:00Z",
   "scope": [
     "sensor/",
     "mosquitto/",
@@ -29,16 +29,24 @@
     "api/api, api/bin/ — build artifacts, gitignored (api/.gitignore)"
   ],
   "fingerprint_algorithm": "sha256 over sorted file list per module; for each file, hash the UTF-8 relative path concatenated with raw file bytes (sha256sum), then sha256 over the concatenation of those per-file digests — computed against current working-tree file contents, not just the last commit",
+  "previous_lock_compared_to": "docs/codemap/codemap.lock at commit cd79da37d4125766fa611c820454f0b19ce15ffe (2026-08-08, api-architecture design)",
+  "changed_modules_since_previous_lock": [
+    "db — добавлена db/migrations/000002_llm_analytics_readonly.up/down.sql: пересоздаёт sensor_readings_hourly со stddev_value/reading_count (ALTER для continuous aggregate недоступен) и создаёт read-only роль analytics_readonly с точечным GRANT SELECT",
+    "api — go.mod/cmd/api/main.go без изменений (GET /health по-прежнему единственный код); модуль изменился только потому, что api-architecture.md переехал под docs (*.md), см. ниже",
+    "docs (*.md) — docs/api-architecture.md дополнен разделом «LLM Analytics» (tool-calling цикл, инструменты, read-only доступ, интерфейс llm.Client); docs/PROJECT.md дополнен разделом с тем же решением и обновлённой статус-таблицей (модуль 8)",
+    "root-config — .env.example дополнен ANALYTICS_DB_USER/ANALYTICS_DB_PASSWORD/LLM_API_KEY"
+  ],
+  "new_modules_since_previous_lock": [],
   "module_fingerprints": {
-    "sensor": "4bea1f89903659dc5b1617dca735905504a9683c5dee2644ec4778caad87b777",
-    "mosquitto": "468e940351bb3306aaeb8f5d8f19ca44c92c57292936f0700c8f1d691aba3c82",
-    "docker-compose.yml": "a4c2821f04f0ef431acb66a9922148f06b04dce069e716d3bc1bbdae7d550eb2",
-    "Makefile": "a5b1a48e785d53a3f4e1c9a6e77c04233f428984b9fad7c3ab184805df13292b",
-    "db": "49237e455d9d35e54ee8ab4b98f666bf0e6d6eff7c74fe039fee9bc00397dd94",
-    "api": "2172805a47588be42df330e8368b8980601283a6c8046d0eff8f54b383f43c41",
-    "consumer": "ebdb97289d82cc5ae07b16abb0bb60ff44ab8b6f472b7d500aeda5eaf2682c82",
-    "ui": "28a4204da5a06dd9a24348c8db74cec33be30749e8773151258321ede04edf5b",
-    "docs (*.md)": "d91512f8f3ca504e1c276d2d10008c85bdab4b0b1c8c166154729519e7bb0b1d",
-    "root-config": "c349095cd099feae5b2f32f275fc519bf6f6d0748f288566497d6aab262a08e4"
+    "sensor": "4ce1be026d4e3beb5633a4a3f7b951499854d0e0441cffac7c666a181b169686",
+    "mosquitto": "b8b885865e3e4531faa2184e8f173d3f2d71749debe66c987e1344346cd7e042",
+    "docker-compose.yml": "6e3537a3902b380bcdf5abb381f4f7eb8f3894164c1bc514e8ebbd04c452ae7f",
+    "Makefile": "b5588212d09d5a13a63837fa23586cf21267654899db8e8d113837217fe475ef",
+    "db": "d51a98007b5fc1f1e508b321032cda71da12ae60d2c83b5640ed33c851d17a5e",
+    "api": "1547debebb6d2cd322bf66d34281ab2539206dd2f5d02f05b3f016fd3f56ecfb",
+    "consumer": "7ccb11dcb3ecd9532f1a897cd8a05c35c4966b2d6864694fda06d42f36baffea",
+    "ui": "4ec52ecaf8f01999e755c31230082c08e85ba8e5f669ed5e6c950e7970e49dae",
+    "docs (*.md)": "f57251b326e3d637b7c8f9dfb65a847ac4150c94df890bd28d4aac94c997d5d7",
+    "root-config (README.MD, AGENTS.md, .gitignore, SimpleMQTTMonitoring.code-workspace, .env.example)": "20b6499923b5feba5e8dbb2a022d9255551b54c21c3358ee2f620d8a8d2a1b72"
   }
 }
