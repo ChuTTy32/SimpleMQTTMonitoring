@@ -144,6 +144,12 @@
   - Layout (слоистая архитектура, как и на фронте) — полное дерево каталогов, маршруты и разбор
     WS-канала вынесены в отдельный документ, см. [`docs/api-architecture.md`](api-architecture.md),
     чтобы не дублировать и не расходиться с ним.
+  - **Архитектура доведена до полного состояния (2026-08-09):** закрыты пробелы, которые не
+    позволяли начать реализацию — маршруты `system_settings`, фильтрация `sensors` по
+    `controller_id`, пагинация списочных ручек, единый формат ошибок, JWT-контракт (TTL 24ч, без
+    refresh), CORS-allowlist, источник данных (raw/hourly) для `GET .../readings`, и решение
+    сделать WS одним каналом с двумя `NOTIFY`-listener'ами вместо двух физических эндпоинтов —
+    все детали в `api-architecture.md`.
 
 ### LLM Analytics — `api/internal/analytics`, `api/internal/llm`
 
@@ -362,6 +368,13 @@ Application), с промышленной автоматизацией вмес�
   Go на REST API изучает вместе с Кириллом
 - Оба — полное понимание всей системы, не только своего слоя
 
+**Разделение работы над `api/` (2026-08-09):** зафиксировано в `docs/api-architecture.md`,
+раздел «Разделение работы между Кириллом и другом» — Кирилл: `controllers`/`sensors`/`readings` +
+WS-инфраструктура и `listener_readings.go`; друг: `auth`/`alerts`/`system_settings` и
+`listener_alerts.go`. Split неравномерный по объёму (Кирилл берёт три модуля и всю
+WS-инфраструктуру, включая её как первый, кто пишет `main.go`/`router.go`/`pgxpool`) — осознанное
+решение пользователя, не пересматривать без явного запроса.
+
 ## Ближайшие шаги (вытекают из статуса выше)
 
 1. Проверить `docker compose up --build` реальной сборкой (не проверено — Docker недоступен в среде, где это писалось), включая новые сервисы `db`/`migrate`, и поправить `sensor/.env-example` на реалистичный шаблон
@@ -375,7 +388,9 @@ Application), с промышленной автоматизацией вмес�
 4. Начать REST API на Go (chi + pgx + sqlc, см. раздел «REST API — `api/`» выше); `depends_on:
    migrate` аналогично Consumer; заложить CRUD-эндпоинты для `controllers`/`sensors` (провижининг
    устройств — обязателен, не только чтение `sensor_readings`) и управление
-   `alert_events.resolved_at`; решить HTTP polling vs WebSocket, задокументировать решение здесь
+   `alert_events.resolved_at`; ~~решить HTTP polling vs WebSocket~~ — решено, WS одним каналом (см.
+   `api-architecture.md`). Работа разделена между Кириллом и другом — см. «Команда» выше;
+   Кирилл начинает с инфраструктуры (`config.go`/`main.go`/`router.go`/`pgxpool`) + `controllers`
 5. Подключить дашборд к реальным данным вместо заглушек
 6. Реализовать `internal/analytics`/`internal/llm` (см. «LLM Analytics» выше) — после того как
    базовый CRUD `api/` заработает; миграция `000002_llm_analytics_readonly.up.sql` уже применяется
