@@ -1,188 +1,179 @@
 {
-  "generated_at": "2026-08-08T14:00:00Z",
-  "generated_from_commit": "cd79da37d4125766fa611c820454f0b19ce15ffe",
+  "generated_at": "2026-08-09T12:00:00Z",
+  "generated_from_commit": "f5592c543bcb543b4af61d85ce154a9f8083b2bf",
   "scope": [
     "sensor/",
     "mosquitto/",
-    "docker-compose.yml",
-    "Makefile",
     "db/",
-    "ui/",
-    "api/",
     "consumer/",
-    "docs/*.md",
-    "README.MD",
-    "AGENTS.md",
-    ".env.example",
-    "SimpleMQTTMonitoring.code-workspace"
+    "api/",
+    "ui/"
   ],
   "nodes": [
     {
-      "id": "docker-compose",
-      "path": "docker-compose.yml",
-      "role": "Orchestration — определяет и запускает локальный стек; обёрнут в Makefile для повседневных команд",
-      "entrypoints": ["docker-compose.yml", "Makefile:14 (up)"],
+      "id": "sensor",
+      "path": "sensor/simulator.py",
+      "role": "Генератор синтетических данных температуры, влажности, давления.",
+      "entrypoints": ["sensor/simulator.py"],
       "tests": [],
-      "constraints": [
-        "5 сервисов: mqtt-broker, simulator, db, migrate (сервисов для consumer/API/дашборда всё ещё нет)",
-        "Makefile — обёртка (up/down/ps/logs/migrate-*/db-shell), не самостоятельный слой",
-        "docker compose config проходит без ошибок; реальный docker compose up не проверялся (Docker недоступен в среде разработки)"
-      ],
-      "evidence": "docker-compose.yml:1-54; Makefile:1-53",
-      "status": "implemented"
+      "constraints": "Конфигурация через .env",
+      "evidence": "sensor/simulator.py"
     },
     {
-      "id": "fake-sensor",
-      "path": "sensor/",
-      "role": "Симулированный IIoT-шлюз — публикует показания по MQTT",
-      "entrypoints": ["sensor/simulator.py:97 (main)"],
-      "tests": [],
-      "constraints": [
-        "Конфиг через .env: MQTT_BROKER, MQTT_BROKER_PORT, GATEWAY_ID, PUBLISH_INTERVAL_SEC",
-        "3 метрики за тик: temperature, humidity, pressure (simulator.py:77-87)",
-        "sensor/Dockerfile берёт sensor/.env через COPY .env .env (gitignored, нужно создать вручную); реальная сборка не проверялась (Docker недоступен в среде проверки)",
-        "sensor/.env-example — по-прежнему placeholder-значения (MQTT_BROKER_PORT=99999 — невалидный порт), Dockerfile его не использует"
-      ],
-      "evidence": "sensor/simulator.py; sensor/Dockerfile",
-      "status": "implemented"
-    },
-    {
-      "id": "mqtt-broker",
+      "id": "mosquitto",
       "path": "mosquitto/config/mosquitto.conf",
-      "role": "MQTT-брокер (Mosquitto 2.x) — шина между датчиком и бэкендом",
+      "role": "MQTT Брокер для обмена сообщениями.",
       "entrypoints": ["mosquitto/config/mosquitto.conf"],
       "tests": [],
-      "constraints": [
-        "listener 1883",
-        "allow_anonymous true — без аутентификации, только для разработки"
-      ],
-      "evidence": "mosquitto/config/mosquitto.conf:1-3",
-      "status": "implemented"
+      "constraints": "Слушает порт 1883, анонимный доступ.",
+      "evidence": "mosquitto/config/mosquitto.conf"
     },
     {
-      "id": "db-migrations",
+      "id": "db",
+      "path": "docker-compose.yml",
+      "role": "PostgreSQL + TimescaleDB для хранения временных рядов (sensor_readings) и конфигураций.",
+      "entrypoints": ["docker-compose.yml (сервис db)"],
+      "tests": [],
+      "constraints": "Hypertable sensor_readings, Continuous Aggregates",
+      "evidence": "docs/database-schema.md"
+    },
+    {
+      "id": "db_migrations",
       "path": "db/migrations/",
-      "role": "Независимая инфраструктура схемы БД — версионированные миграции, осознанно НЕ часть api/ или consumer/",
-      "entrypoints": ["db/migrations/000001_init_schema.up.sql", "db/migrations/000001_init_schema.down.sql"],
+      "role": "Независимая инфраструктура миграций (golang-migrate).",
+      "entrypoints": ["db/migrations/*.sql"],
       "tests": [],
-      "constraints": [
-        "Решение зафиксировано 2026-08-08: миграции внутри api/ создавали бы скрытую зависимость Consumer от деплоя API — теперь общая точка контакта только БД",
-        "Конвенция golang-migrate: {версия}_{название}.up/down.sql",
-        "Применяется одноразовым сервисом migrate (docker-compose.yml) с depends_on: db: condition: service_healthy",
-        "Consumer и API, когда появятся в docker-compose, должны объявить depends_on: migrate: condition: service_completed_successfully"
-      ],
-      "evidence": "db/migrations/000001_init_schema.up.sql:1-150",
-      "status": "implemented"
+      "constraints": "Одноразовый сервис migrate в docker-compose.yml",
+      "evidence": "db/migrations/000001_init_schema.up.sql"
     },
     {
-      "id": "timescaledb",
-      "path": "docker-compose.yml (сервис db)",
-      "role": "PostgreSQL + TimescaleDB — 6 таблиц, sensor_readings как hypertable",
-      "entrypoints": ["docker-compose.yml:18-34"],
-      "tests": [],
-      "constraints": [
-        "Схема (2026-08-08): users, controllers, sensors, system_settings, sensor_readings, alert_events — metrics как отдельная таблица убрана (структурный баг, см. docs/database-schema.md)",
-        "sensors.controller_id NOT NULL + индекс; CHECK на роли и на min_threshold < max_threshold; sensor_readings PRIMARY KEY(sensor_id, time) от дублей",
-        "Retention policy (90 дней, плейсхолдер) + continuous aggregate (часовые агрегаты) — не голый Postgres",
-        "controllers.mqtt_gateway_id — сопоставление с gateway_id из MQTT-топика",
-        "Провижининг устройств только вручную через API — Consumer не создаёт controllers/sensors на неизвестный топик",
-        "docker compose config валиден; реальный запуск и живая накатка миграции не проверялись (Docker недоступен в среде разработки)"
-      ],
-      "evidence": "docker-compose.yml:18-34; db/migrations/000001_init_schema.up.sql; docs/database-schema.md",
-      "status": "implemented"
-    },
-    {
-      "id": "dotnet-consumer",
+      "id": "consumer",
       "path": "consumer/",
-      "role": "Планируемый сервис — .NET Worker, подписка на MQTT, запись в sensor_readings",
-      "entrypoints": [],
+      "role": ".NET Worker Service для чтения MQTT и записи в БД.",
+      "entrypoints": ["consumer/.gitkeep"],
       "tests": [],
-      "constraints": [
-        "Директория создана (только consumer/.gitkeep), исходников нет",
-        "Планируемый стек: .NET 8 Worker Service, MQTTnet, Npgsql/Dapper",
-        "На неизвестный gateway_id/topic — не создаёт controllers/sensors, дропает сообщение и логирует (решение по провижинингу от 2026-08-08)"
-      ],
-      "evidence": "consumer/.gitkeep; docs/PROJECT.md",
-      "status": "planned"
+      "constraints": "Игнорирует неизвестные gateway_id",
+      "evidence": "docs/PROJECT.md"
     },
     {
-      "id": "rest-api",
-      "path": "api/",
-      "role": "REST API на Go — chi + pgx + sqlc; первая ручка сделана, остальное спроектировано",
-      "entrypoints": ["api/cmd/api/main.go:59 (healthHandler → GET /health)"],
+      "id": "api_core",
+      "path": "api/cmd/api/main.go",
+      "role": "REST API на Go (CRUD контроллеров/датчиков, выдача метрик).",
+      "entrypoints": ["api/cmd/api/main.go"],
       "tests": [],
-      "constraints": [
-        "Стек сменён с .NET Minimal API на Go (2026-08-08) — Consumer остаётся на .NET, смена касается только API",
-        "GET /health реализован и проверен живьём (go run + curl → {\"status\":\"ok\"}); остальной код не написан",
-        "Полная целевая структура (CRUD controllers/sensors/users/alert_events + WebSocket-канал метрик) спроектирована в docs/api-architecture.md, но не реализована",
-        "WebSocket-данные — через Postgres LISTEN/NOTIFY (не прямая связь с Consumer); NOTIFY-триггер — будущая миграция 000002, ещё не создана",
-        "Миграции НЕ внутри api/ — общий db/migrations/, см. узел db-migrations"
-      ],
-      "evidence": "api/cmd/api/main.go:1-73; docs/api-architecture.md",
-      "status": "partial"
+      "constraints": "Go 1.23, chi, pgx, sqlc",
+      "evidence": "api/cmd/api/main.go"
     },
     {
-      "id": "dashboard-ui",
-      "path": "ui/",
-      "role": "Веб-дашборд — Vue 3 + Vite, каркас без подключения к бэкенду",
+      "id": "api_ws",
+      "path": "api/internal/ws/",
+      "role": "WebSocket сервер для realtime данных.",
+      "entrypoints": ["api/internal/ws/handler.go"],
+      "tests": [],
+      "constraints": "LISTEN/NOTIFY из Postgres",
+      "evidence": "docs/api-architecture.md"
+    },
+    {
+      "id": "api_analytics",
+      "path": "api/internal/analytics/",
+      "role": "Модуль LLM аналитики (tool-calling цикл).",
+      "entrypoints": ["api/internal/analytics/agent.go"],
+      "tests": [],
+      "constraints": "read-only доступ к БД (роль analytics_readonly)",
+      "evidence": "docs/api-architecture.md"
+    },
+    {
+      "id": "ui",
+      "path": "ui/src/main.ts",
+      "role": "Веб-дашборд на Vue 3 + Vite.",
       "entrypoints": ["ui/src/main.ts"],
       "tests": ["ui/src/__tests__/App.spec.ts"],
-      "constraints": [
-        "App.vue, router, Pinia-заглушка (stores/counter.ts), AppScaffold/SideBar, MainPage",
-        "axios есть в зависимостях, но ни одного реального вызова к API в коде нет",
-        "Стек разошёлся с исходным планом: Nuxt 4 → Vue 3 + Vite"
-      ],
-      "evidence": "ui/package.json; ui/src/main.ts",
-      "status": "implemented"
+      "constraints": "Tailwind CSS, Pinia, axios",
+      "evidence": "ui/src/main.ts"
     }
   ],
   "edges": [
-    {"from":"docker-compose","to":"mqtt-broker","type":"calls","status":"implemented","evidence":"docker-compose.yml:2-9"},
-    {"from":"docker-compose","to":"fake-sensor","type":"calls","status":"implemented","evidence":"docker-compose.yml:11-16"},
-    {"from":"docker-compose","to":"timescaledb","type":"calls","status":"implemented","evidence":"docker-compose.yml:18-34"},
-    {"from":"docker-compose","to":"db-migrations","type":"calls","status":"implemented","evidence":"docker-compose.yml:39-51"},
-    {"from":"fake-sensor","to":"mqtt-broker","type":"publishes","status":"implemented","evidence":"sensor/simulator.py:83-87 (топик gateway/{GATEWAY_ID}/{metric})"},
-    {"from":"dotnet-consumer","to":"mqtt-broker","type":"subscribes","status":"planned","evidence":"unknown — планируется, кода нет"},
-    {"from":"dotnet-consumer","to":"timescaledb","type":"writes","status":"planned","evidence":"unknown — планируется, кода нет"},
-    {"from":"db-migrations","to":"timescaledb","type":"writes","status":"implemented","evidence":"db/migrations/000001_init_schema.up.sql:1-150 (DDL, применяется сервисом migrate)"},
-    {"from":"rest-api","to":"timescaledb","type":"reads","status":"planned","evidence":"unknown — api/cmd/api/main.go пока не подключается к БД, только /health"},
-    {"from":"dashboard-ui","to":"rest-api","type":"calls","status":"planned","evidence":"unknown — axios в зависимостях, но ни одного вызова к API в исходниках нет"}
+    {
+      "from": "sensor",
+      "to": "mosquitto",
+      "type": "publishes",
+      "evidence": "sensor/simulator.py"
+    },
+    {
+      "from": "consumer",
+      "to": "mosquitto",
+      "type": "subscribes",
+      "evidence": "docs/PROJECT.md"
+    },
+    {
+      "from": "consumer",
+      "to": "db",
+      "type": "writes",
+      "evidence": "docs/PROJECT.md"
+    },
+    {
+      "from": "db_migrations",
+      "to": "db",
+      "type": "writes",
+      "evidence": "db/migrations/"
+    },
+    {
+      "from": "api_core",
+      "to": "db",
+      "type": "reads",
+      "evidence": "docs/api-architecture.md"
+    },
+    {
+      "from": "api_core",
+      "to": "db",
+      "type": "writes",
+      "evidence": "docs/api-architecture.md"
+    },
+    {
+      "from": "db",
+      "to": "api_ws",
+      "type": "calls",
+      "evidence": "docs/api-architecture.md (NOTIFY)"
+    },
+    {
+      "from": "api_analytics",
+      "to": "db",
+      "type": "reads",
+      "evidence": "docs/api-architecture.md (analytics_readonly)"
+    },
+    {
+      "from": "ui",
+      "to": "api_core",
+      "type": "calls",
+      "evidence": "docs/PROJECT.md"
+    },
+    {
+      "from": "ui",
+      "to": "api_ws",
+      "type": "subscribes",
+      "evidence": "docs/api-architecture.md"
+    }
   ],
   "flows": [
     {
-      "id": "flow-sensor-publish",
-      "trigger": "Таймер в sensor/simulator.py — тик каждые PUBLISH_INTERVAL_SEC сек",
-      "steps": ["fake-sensor", "mqtt-broker"],
-      "outcome": "Сообщение доставляется в топик Mosquitto. Требует рабочего sensor/.env в build-контексте (gitignored); реальная сборка не проверялась.",
-      "status": "implemented"
+      "trigger": "Запуск системы",
+      "steps": ["db_migrations", "db", "consumer", "api_core"],
+      "outcome": "База развёрнута, миграции применены, сервисы стартовали (depends_on)."
     },
     {
-      "id": "flow-compose-up",
-      "trigger": "docker compose up --build (или make up)",
-      "steps": ["docker-compose", "mqtt-broker", "fake-sensor", "timescaledb", "db-migrations"],
-      "outcome": "5 сервисов поднимаются, migrate накатывает схему на db. docker compose config валиден; живой запуск не проверялся — Docker недоступен в среде разработки.",
-      "status": "implemented"
+      "trigger": "Генерация телеметрии",
+      "steps": ["sensor", "mosquitto", "consumer", "db"],
+      "outcome": "Показания датчика записаны в TimescaleDB."
     },
     {
-      "id": "flow-db-bootstrap",
-      "trigger": "Сервис migrate стартует после db: condition: service_healthy",
-      "steps": ["timescaledb", "db-migrations"],
-      "outcome": "db/migrations/000001_init_schema.up.sql применяется к пустой БД: 6 таблиц, retention policy, continuous aggregate. Не проверено живым запуском.",
-      "status": "implemented"
+      "trigger": "Чтение метрик в реальном времени",
+      "steps": ["db", "api_ws", "ui"],
+      "outcome": "Дашборд обновляется по WebSocket."
     },
     {
-      "id": "flow-api-health",
-      "trigger": "go run ./cmd/api && curl localhost:8080/health",
-      "steps": ["rest-api"],
-      "outcome": "Проверено вживую в этой сессии: возвращает {\"status\":\"ok\"}, HTTP 200. Единственный работающий кусок API на сегодня.",
-      "status": "implemented"
-    },
-    {
-      "id": "flow-e2e-target",
-      "trigger": "fake-sensor публикует показание (целевой e2e-поток из docs/PROJECT.md)",
-      "steps": ["fake-sensor", "mqtt-broker", "dotnet-consumer", "timescaledb", "rest-api", "dashboard-ui"],
-      "outcome": "Целевой результат — обновление графика на дашборде в реальном времени. Из цепочки реально работают fake-sensor, mqtt-broker и timescaledb (с миграциями); dotnet-consumer не реализован, rest-api умеет только /health, dashboard-ui не подключён.",
-      "status": "planned"
+      "trigger": "LLM Запрос",
+      "steps": ["ui", "api_analytics", "db", "api_analytics", "ui"],
+      "outcome": "Текстовая сводка от LLM отображается в UI."
     }
   ]
 }

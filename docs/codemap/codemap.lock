@@ -1,12 +1,9 @@
 {
-  "commit": "cd79da37d4125766fa611c820454f0b19ce15ffe",
+  "commit": "f5592c543bcb543b4af61d85ce154a9f8083b2bf",
   "branch": "feature/db-and-go",
   "working_tree_dirty": true,
-  "dirty_paths": [
-    "docs/PROJECT.md (modified, uncommitted)",
-    "docs/api-architecture.md (new, uncommitted)"
-  ],
-  "generated_at": "2026-08-08T14:00:00Z",
+  "dirty_paths": [".env.example","docs/PROJECT.md","docs/api-architecture.md","docs/codemap/codemap.html","docs/codemap/codemap.json","db/migrations/000002_llm_analytics_readonly.down.sql","db/migrations/000002_llm_analytics_readonly.up.sql","docs/codemap/generate_lock.sh"],
+  "generated_at": "2026-08-09T07:35:19Z",
   "scope": [
     "sensor/",
     "mosquitto/",
@@ -32,27 +29,16 @@
     "api/api, api/bin/ — build artifacts, gitignored (api/.gitignore)"
   ],
   "fingerprint_algorithm": "sha256 over sorted file list per module; for each file, hash the UTF-8 relative path concatenated with raw file bytes (sha256sum), then sha256 over the concatenation of those per-file digests — computed against current working-tree file contents, not just the last commit",
-  "previous_lock_compared_to": "docs/codemap/codemap.lock at commit c2c453eddb96fd3a75acb6e76b3eafcee063c668 (main, 2026-08-06, before this branch's DB/API work)",
-  "changed_modules_since_previous_lock": [
-    "docker-compose.yml — добавлены сервисы db (timescale/timescaledb) и migrate (одноразовый прогон миграций)",
-    "docs (*.md) — docs/database-schema.md переработан (metrics убрана, alert_events добавлена, ограничения целостности); docs/PROJECT.md дополнен решениями по стеку/scope/миграциям (в основном ещё не закоммичено, working_tree_dirty)",
-    "api — из placeholder (.gitkeep) стал реальным Go-модулем: go.mod, cmd/api/main.go (GET /health, проверено вживую)",
-    "root-config — добавлен .env.example (новый), README.MD правился по ходу смены стека API"
-  ],
-  "new_modules_since_previous_lock": [
-    "db — db/migrations/, независимая инфраструктура схемы БД (не существовала на прошлом lock)",
-    "Makefile — обёртка над docker compose (не существовал на прошлом lock)"
-  ],
   "module_fingerprints": {
-    "sensor": "4ce1be026d4e3beb5633a4a3f7b951499854d0e0441cffac7c666a181b169686",
-    "mosquitto": "b8b885865e3e4531faa2184e8f173d3f2d71749debe66c987e1344346cd7e042",
-    "docker-compose.yml": "6e3537a3902b380bcdf5abb381f4f7eb8f3894164c1bc514e8ebbd04c452ae7f",
-    "Makefile": "b5588212d09d5a13a63837fa23586cf21267654899db8e8d113837217fe475ef",
-    "db": "a96dce05eb93922c0e1ea26287b9746673e7f17a0d6afa0a4faf2c03490292d2",
-    "api": "a5e009cdd2f79760c65004736c91e2c477df874cbaef1370b7587fa54cf234d8",
-    "consumer": "7ccb11dcb3ecd9532f1a897cd8a05c35c4966b2d6864694fda06d42f36baffea",
-    "ui": "4ec52ecaf8f01999e755c31230082c08e85ba8e5f669ed5e6c950e7970e49dae",
-    "docs (*.md)": "de9abc3f8fd47136dda8ed17f0365219522dbd4cbbf74ecb6e2a45bae87daad3",
-    "root-config (README.MD, AGENTS.md, .gitignore, SimpleMQTTMonitoring.code-workspace, .env.example)": "c19012c6a4f92aec391cadf5ea6baa4b7618f4df87bfc6d408f14ca10ada42b1"
+    "sensor": "4bea1f89903659dc5b1617dca735905504a9683c5dee2644ec4778caad87b777",
+    "mosquitto": "468e940351bb3306aaeb8f5d8f19ca44c92c57292936f0700c8f1d691aba3c82",
+    "docker-compose.yml": "a4c2821f04f0ef431acb66a9922148f06b04dce069e716d3bc1bbdae7d550eb2",
+    "Makefile": "a5b1a48e785d53a3f4e1c9a6e77c04233f428984b9fad7c3ab184805df13292b",
+    "db": "49237e455d9d35e54ee8ab4b98f666bf0e6d6eff7c74fe039fee9bc00397dd94",
+    "api": "2172805a47588be42df330e8368b8980601283a6c8046d0eff8f54b383f43c41",
+    "consumer": "ebdb97289d82cc5ae07b16abb0bb60ff44ab8b6f472b7d500aeda5eaf2682c82",
+    "ui": "28a4204da5a06dd9a24348c8db74cec33be30749e8773151258321ede04edf5b",
+    "docs (*.md)": "d91512f8f3ca504e1c276d2d10008c85bdab4b0b1c8c166154729519e7bb0b1d",
+    "root-config": "c349095cd099feae5b2f32f275fc519bf6f6d0748f288566497d6aab262a08e4"
   }
 }

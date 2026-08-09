@@ -60,6 +60,7 @@
 | 5 | REST API | 🟡 первая ручка + структура спроектирована | `GET /health` работает; полная структура — [`docs/api-architecture.md`](api-architecture.md); остальные модули не реализованы |
 | 6 | Веб-дашборд | 🟡 каркас в main, не подключён | Стек — Vue 3 + Vite (не Nuxt, см. ниже); смёржен в `main`, но не подключён к реальному API |
 | 7 | Финал / интеграция | ⬜ не начато | End-to-end пайплайн (датчик → БД → API → дашборд) пока не собран |
+| 8 | LLM Analytics | 🟡 архитектура спроектирована, кода нет | `POST /analytics/query`, tool-calling цикл, read-only роль `analytics_readonly` — см. «LLM Analytics» ниже и [`docs/api-architecture.md`](api-architecture.md) |
 
 ## Известные проблемы
 
@@ -143,6 +144,38 @@
   - Layout (слоистая архитектура, как и на фронте) — полное дерево каталогов, маршруты и разбор
     WS-канала вынесены в отдельный документ, см. [`docs/api-architecture.md`](api-architecture.md),
     чтобы не дублировать и не расходиться с ним.
+
+### LLM Analytics — `api/internal/analytics`, `api/internal/llm`
+
+**Решение зафиксировано (2026-08-09):** пользователь задаёт вопрос на естественном языке
+(«как вела себя температура датчика X за неделю», «сравни контроллеры 1 и 2») и получает
+текстовую сводку. Архитектура — минимально достаточная, часть исходной концепции сознательно
+отклонена на этом этапе:
+
+- **не отдельный микросервис** — модуль `internal/analytics` внутри уже существующего `api/`,
+  не `llm-analytics/` со своим Dockerfile/compose-сервисом;
+- **не Python-sandbox с произвольной генерацией кода** — отдельный security-проект
+  непропорционального риска для текущего масштаба команды (см. [[team-and-scope]] в памяти);
+  если появится задача, для которой не хватает конечного набора tool'ов — решать отдельно, не
+  сейчас;
+- **не отдельная таблица `llm_context`** — контекст (какие есть контроллеры/датчики) вычисляется
+  `SELECT`-ом на лету при каждом запросе, не материализуется.
+
+**Главный принцип:** LLM — это парсер естественного языка в аргументы функций (tool calling),
+не более. Вся логика доступа к данным — детерминированный Go + SQL. Полное описание
+tool-calling цикла, набора инструментов, лимитов и read-only доступа к БД —
+[`docs/api-architecture.md`](api-architecture.md), раздел «LLM Analytics».
+
+**Правки БД (2026-08-09, `db/migrations/000002_llm_analytics_readonly.up/down.sql`):**
+`sensor_readings_hourly` (continuous aggregate) пересоздан с добавлением `stddev_value` и
+`reading_count` (ALTER для continuous aggregate недоступен в TimescaleDB — только пересоздание);
+добавлена read-only роль `analytics_readonly` с `GRANT SELECT` только на `controllers`,
+`sensors`, `sensor_readings`, `sensor_readings_hourly` — `users`, `alert_events`,
+`system_settings` осознанно исключены, пока под них нет tool'а. Переменные окружения —
+`ANALYTICS_DB_USER`/`ANALYTICS_DB_PASSWORD`/`LLM_API_KEY` в `.env`/`.env.example`.
+
+Из-за этой миграции будущая `NOTIFY`-триггер миграция для WS-канала (см. «REST API — `api/`»
+выше) сдвинута с `000002` на `000003`.
 
 ### Веб-дашборд — `ui/` (в `main`, не подключён к бэкенду)
 
@@ -270,7 +303,9 @@ SQL-запросов *для самого API*. Это не миграции, а
 │   └── .env-example
 ├── db/migrations/                       # независимая инфраструктура схемы БД, см. «Миграции БД»
 │   ├── 000001_init_schema.up.sql        # не часть api/ или consumer/
-│   └── 000001_init_schema.down.sql
+│   ├── 000001_init_schema.down.sql
+│   ├── 000002_llm_analytics_readonly.up.sql   # stddev/count в sensor_readings_hourly + роль analytics_readonly
+│   └── 000002_llm_analytics_readonly.down.sql
 ├── consumer/                            # только .gitkeep, кода нет
 ├── api/                                 # только .gitkeep, кода нет
 ├── ui/                                  # Vue 3 + Vite дашборд, каркас
@@ -342,3 +377,6 @@ Application), с промышленной автоматизацией вмес�
    устройств — обязателен, не только чтение `sensor_readings`) и управление
    `alert_events.resolved_at`; решить HTTP polling vs WebSocket, задокументировать решение здесь
 5. Подключить дашборд к реальным данным вместо заглушек
+6. Реализовать `internal/analytics`/`internal/llm` (см. «LLM Analytics» выше) — после того как
+   базовый CRUD `api/` заработает; миграция `000002_llm_analytics_readonly.up.sql` уже применяется
+   вместе с `000001` через сервис `migrate`, реализации кода пока нет
