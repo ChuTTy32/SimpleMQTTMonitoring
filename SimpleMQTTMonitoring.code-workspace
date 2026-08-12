@@ -1,52 +1,57 @@
 {
-	"folders": [
-		{
-			"name": "📦 root",
-			"path": "."
-		},
-		{
-			"name": "🖥️ ui",
-			"path": "ui"
-		},
-		{
-			"name": "🐍 sensor",
-			"path": "sensor"
-		},
-		{
-			"name": "⚙️ consumer",
-			"path": "consumer"
-		},
-		{
-			"name": "🌐 api",
-			"path": "api"
-		},
-		{
-			"name": "📡 mosquitto",
-			"path": "mosquitto"
-		},
-		{
-			"name": "📄 docs",
-			"path": "docs"
-		}
-	],
-	"settings": {
-		"files.exclude": {
-			"ui": true,
-			"sensor": true,
-			"consumer": true,
-			"api": true,
-			"mosquitto": true,
-			"docs": true
-		}
-	},
-	"extensions": {
-		"recommendations": [
-			"Vue.volar",
-			"dbaeumer.vscode-eslint",
-			"esbenp.prettier-vscode",
-			"bradlc.vscode-tailwindcss",
-			"ms-python.python",
-			"ms-azuretools.vscode-docker"
-		]
-	}
+  "folders": [
+    {
+      "name": "📦 root",
+      "path": ".",
+    },
+    {
+      "name": "🖥️ ui",
+      "path": "ui",
+    },
+    {
+      "name": "🐍 sensor",
+      "path": "sensor",
+    },
+    {
+      "name": "⚙️ consumer",
+      "path": "consumer",
+    },
+    {
+      "name": "🌐 api",
+      "path": "api",
+    },
+    {
+      "name": "🗃️ db",
+      "path": "db",
+    },
+    {
+      "name": "📡 mosquitto",
+      "path": "mosquitto",
+    },
+    {
+      "name": "📄 docs",
+      "path": "docs",
+    },
+  ],
+  "settings": {
+    "files.exclude": {
+      "ui": true,
+      "sensor": true,
+      "consumer": true,
+      "api": true,
+      "mosquitto": true,
+      "docs": true,
+      "db": true,
+    },
+  },
+  "extensions": {
+    "recommendations": [
+      "Vue.volar",
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "bradlc.vscode-tailwindcss",
+      "ms-python.python",
+      "ms-azuretools.vscode-docker",
+    ],
+  },
 }

@@ -26,7 +26,7 @@
 [PostgreSQL + TimescaleDB]    — план, сервиса нет в docker-compose.yml
         │  SELECT
         ▼
-[REST API (+ WebSocket?)]     — план, кода нет (только api/.gitkeep)
+[REST API на Go (+ WebSocket?)] — план, кода нет (только api/.gitkeep)
         ▼
 [Vue Dashboard]                — каркас есть в ui/, к бэкенду не подключён
 ```
@@ -70,7 +70,7 @@ Storage → Application), только вместо трекинга товар�
 - **MQTT Broker** (`mosquitto/`) — Mosquitto 2.x (Docker)
 - **Consumer** (`consumer/`) — .NET Worker Service + MQTTnet + Npgsql *(запланировано; директория есть, кода нет)*
 - **PostgreSQL + TimescaleDB** *(схема описана в [`docs/database-schema.md`](docs/database-schema.md), сервис ещё не развёрнут)*
-- **REST API** (`api/`) — .NET Minimal API, возможно + WebSocket для realtime *(запланировано; директория есть, кода нет)*
+- **REST API** (`api/`) — Go, chi + pgx + sqlc, возможно + WebSocket для realtime *(запланировано; директория есть, кода нет; детали и обоснование стека — [`docs/PROJECT.md`](docs/PROJECT.md))*
 - **Дашборд** (`ui/`) — Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios + Tailwind CSS *(каркас есть, к реальному бэкенду не подключён)*
 - **Инфраструктура** — Docker + Docker Compose
 
